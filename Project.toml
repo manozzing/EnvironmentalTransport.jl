@@ -1,0 +1,13 @@
+name = "EnvironmentalTransport"
+uuid = "9e73f4c4-d7e8-4c78-8a11-cd2430746631"
+authors = ["EarthSthSciML authors and contributors"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.8"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
