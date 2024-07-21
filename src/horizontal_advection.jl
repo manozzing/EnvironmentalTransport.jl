@@ -259,6 +259,9 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
         dx = Re * cos(lats[j] * π / 180) * (lons[2] - lons[1]) * π / 180
         s1d_xout = advect1d(s1d_xin, vel_x1d, nx, dt, dx)
 
+        s1d_xout = [
+            s1d_xout[begin], s1d_xout[begin], s1d_xout..., s1d_xout[end], s1d_xout[end]]
+
         F_Q[:, j + 2] = s1d_xout[:]
     end
 
@@ -270,6 +273,8 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
             vel_y1d[j] = v_edge[i, j]
         end
         s1d_yout = advect1d(s1d_yin, vel_y1d, ny, dt, dy)
+        s1d_yout = [
+            s1d_yout[begin], s1d_yout[begin], s1d_yout..., s1d_yout[end], s1d_yout[end]]
 
         G_Q[i + 2, :] = s1d_yout[:]
     end
@@ -283,6 +288,8 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
         end
         dx = Re * cos(lats[j] * π / 180) * (lons[2] - lons[1]) * π / 180
         s1d_xout = advect1d(s1d_xin, vel_x1d, nx, dt, dx)
+        s1d_xout = [
+            s1d_xout[begin], s1d_xout[begin], s1d_xout..., s1d_xout[end], s1d_xout[end]]
 
         F_GQ[:, j + 2] = s1d_xout[:]
     end
@@ -295,6 +302,8 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
             vel_y1d[j] = v_edge[i, j]
         end
         s1d_yout = advect1d(s1d_yin, vel_y1d, ny, dt, dy)
+        s1d_yout = [
+            s1d_yout[begin], s1d_yout[begin], s1d_yout..., s1d_yout[end], s1d_yout[end]]
 
         G_FQ[i + 2, :] = s1d_yout[:]
     end
