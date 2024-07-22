@@ -3,56 +3,37 @@ export advect1d_l94, advect1d_ppm, advect2D
 """
 L94 advection in 1-D (Lin et al., 1994)
 """
-function advect1d_l94(s1d_in::Vector{Float64}, vel_1d::Vector{Float64}, nz, Δt, Δz)
-    ϕ1 = zeros(Float64, nz + 4)
-    ϕ2 = zeros(Float64, nz + 4)
-    δϕ1 = zeros(Float64, nz + 4)
-    Δϕ1_avg = zeros(Float64, nz + 3)
-    ϕ1_min = zeros(Float64, nz + 3)
-    ϕ1_max = zeros(Float64, nz + 3)
-    Δϕ1_mono = zeros(Float64, nz + 3)
-    FLUX = zeros(Float64, nz + 1)
-    courant = zeros(Float64, nz + 1)
-    U = zeros(Float64, nz + 1)
+function advect1d_l94(s1d_in::Vector{Float64}, U::Vector{Float64}, nz, Δt, Δz)
     s1d_out = zeros(Float64, nz)
 
-    U = vel_1d
-
-    #@tullio ϕ1[i] = s1d_in[i]
     ## Initialization
-    ϕ1[3:(nz + 2)] = s1d_in[1:nz]
-    ϕ1[1] = ϕ1[3]
-    ϕ1[2] = ϕ1[3]
-    ϕ1[nz + 3] = ϕ1[nz + 2]
-    ϕ1[nz + 4] = ϕ1[nz + 2]
+    ϕ1(i) = i < 3 ? s1d_in[1] : i > nz + 2 ? s1d_in[end] : s1d_in[i - 2]
 
-    @tullio δϕ1[i] = ϕ1[i] - ϕ1[i - 1]
+    δϕ1(i) = ϕ1(i) - ϕ1(i - 1)
 
-    @tullio Δϕ1_avg[i] = (δϕ1[i] + δϕ1[i + 1]) / 2.0
+    Δϕ1_avg(i) = (δϕ1(i) + δϕ1(i + 1)) / 2.0
 
     ## Monotonicity slope limiter
-    @tullio ϕ1_min[i] = minimum((ϕ1[i - 1], ϕ1[i], ϕ1[i + 1]))
-    @tullio ϕ1_max[i] = maximum((ϕ1[i - 1], ϕ1[i], ϕ1[i + 1]))
-    @tullio Δϕ1_mono[i + 1] = sign(Δϕ1_avg[i + 1]) *
-                              minimum((
-        abs(Δϕ1_avg[i + 1]), 2 * (ϕ1[i + 1] - ϕ1_min[i + 1]),
-        2 * (ϕ1_max[i + 1] - ϕ1[i + 1])))
+    ϕ1_min(i) = minimum((ϕ1(i - 1), ϕ1(i), ϕ1(i + 1)))
+    ϕ1_max(i) = maximum((ϕ1(i - 1), ϕ1(i), ϕ1(i + 1)))
+    function Δϕ1_mono(i)
+        sign(Δϕ1_avg(i)) *
+        minimum((abs(Δϕ1_avg(i)), 2 * (ϕ1(i) - ϕ1_min(i)),
+            2 * (ϕ1_max(i) - ϕ1(i))))
+    end
 
-    @tullio courant[i] = U[i] * Δt / (Δz)
+    courant(i) = U[i] * Δt / (Δz)
 
-    @tullio FLUX[i] = (courant[i] >= 0) *
-                      (U[i] * (ϕ1[i + 1] + Δϕ1_mono[i + 1] * (1 - courant[i]) / 2.0)) +
-                      (courant[i] < 0) *
-                      (U[i] * (ϕ1[i + 2] - Δϕ1_mono[i + 2] * (1 + courant[i]) / 2.0))
+    function FLUX(i)
+        ifelse(U[i] >= 0,
+            (U[i] * (ϕ1(i + 1) + Δϕ1_mono(i + 1) * (1 - courant(i)) / 2.0)),
+            (U[i] * (ϕ1(i + 2) - Δϕ1_mono(i + 2) * (1 + courant(i)) / 2.0)))
+    end
 
-    @tullio ϕ2[i] = ϕ1[i] - Δt / Δz * (FLUX[i - 1] - FLUX[i - 2])
+    ϕ2(i) = ϕ1(i) - Δt / Δz * (FLUX(i - 1) - FLUX(i - 2))
 
     for i in 1:nz
-        if ϕ2[i + 2] >= 0
-            s1d_out[i] = ϕ2[i + 2]
-        else
-            s1d_out[i] = 0
-        end
+        s1d_out[i] = max(zero(eltype(s1d_in)), ϕ2(i + 2))
     end
 
     return s1d_out
@@ -61,137 +42,95 @@ end
 """
 PPM advection in 1-D (Collela and Woodward, 1984)
 """
-function advect1d_ppm(s1d_in::Vector{Float64}, vel_1d::Vector{Float64}, nz, Δt, Δz)
+function advect1d_ppm(s1d_in::Vector{Float64}, U::Vector{Float64}, nz, Δt, Δz)
     ϵ = 0.01
     η⁽¹⁾ = 20
     η⁽²⁾ = 0.05
 
-    ϕ1 = zeros(Float64, nz + 6)
-    ϕ2 = zeros(Float64, nz + 6)
-    δϕ = zeros(Float64, nz + 6)
-    δₘϕ = zeros(Float64, nz + 6)
-    ϕ₊½ = zeros(Float64, nz + 6)
-    ϕL = zeros(Float64, nz + 6)
-    ϕR = zeros(Float64, nz + 6)
-    ϕLᵈ = zeros(Float64, nz + 6)
-    ϕRᵈ = zeros(Float64, nz + 6)
-    Δϕ = zeros(Float64, nz + 6)
-    δ²ϕ = zeros(Float64, nz + 6)
-    η_tilde = zeros(Float64, nz + 6)
-    η = zeros(Float64, nz + 6)
-    ϕ₆ = zeros(Float64, nz + 6)
-
-    FLUX = zeros(Float64, nz + 1)
-    courant = zeros(Float64, nz + 1)
-    U = zeros(Float64, nz + 1)
     s1d_out = zeros(Float64, nz)
 
-    U = vel_1d
-
     ## Initialization
-    ϕ1[4:(nz + 3)] = s1d_in[1:nz]
-    ϕ1[1] = ϕ1[4]
-    ϕ1[2] = ϕ1[4]
-    ϕ1[3] = ϕ1[4]
-    ϕ1[nz + 4] = ϕ1[nz + 3]
-    ϕ1[nz + 5] = ϕ1[nz + 3]
-    ϕ1[nz + 6] = ϕ1[nz + 3]
+    ϕ1(i) = i < 4 ? s1d_in[1] : i > nz + 3 ? s1d_in[end] : s1d_in[i - 3]
 
     ## Edge value calculation
-    for i in 2:(nz + 5)
-        δϕ[i] = 1 / 2 * (ϕ1[i + 1] - ϕ1[i - 1])
+    δϕ(i) = 1 / 2 * (ϕ1(i + 1) - ϕ1(i - 1))
+
+    function δₘϕ(i)
+        ifelse((ϕ1(i + 1) - ϕ1(i)) * (ϕ1(i) - ϕ1(i - 1)) > 0,
+            min(
+                abs(δϕ(i - 1)), 2 * abs(ϕ1(i) - ϕ1(i - 1)), 2 * abs(ϕ1(i + 1) - ϕ1(i))) *
+            sign(δϕ(i - 1)),
+            zero(eltype(s1d_in))
+        )
     end
 
-    for i in 2:(nz + 5)
-        if (ϕ1[i + 1] - ϕ1[i]) * (ϕ1[i] - ϕ1[i - 1]) > 0
-            δₘϕ[i] = min(
-                abs(δϕ[i - 1]), 2 * abs(ϕ1[i] - ϕ1[i - 1]), 2 * abs(ϕ1[i + 1] - ϕ1[i])) *
-                     sign(δϕ[i - 1])
-        else
-            δₘϕ[i] = 0
-        end
-    end
-
-    for i in 2:(nz + 5)
-        ϕ₊½[i] = 1 / 2 * (ϕ1[i + 1] + ϕ1[i]) - 1 / 6 * (δₘϕ[i + 1] - δₘϕ[i])
-    end
-
-    for i in 2:(nz + 4)
-        ϕL[i] = ϕ₊½[i]
-        ϕR[i] = ϕ₊½[i + 1]
-    end
+    ϕ₊½(i) = 1 / 2 * (ϕ1(i + 1) + ϕ1(i)) - 1 / 6 * (δₘϕ(i + 1) - δₘϕ(i))
 
     ## Discontinuity detection
-    for i in 2:(nz + 5)
-        δ²ϕ[i] = 1 / (6 * Δz^2) * (ϕ1[i + 1] - 2 * ϕ1[i] + ϕ1[i - 1])
+    δ²ϕ(i) = 1 / (6 * Δz^2) * (ϕ1(i + 1) - 2 * ϕ1(i) + ϕ1(i - 1))
+
+    function η_tilde(i)
+        ifelse(
+            -δ²ϕ(i + 1) * δ²ϕ(i - 1) * abs(ϕ1(i + 1) - ϕ1(i - 1)) -
+            ϵ * min(abs(ϕ1(i + 1)), abs(ϕ1(i - 1))) > 0,
+            -(δ²ϕ(i + 1) - δ²ϕ(i - 1)) * (Δz^2) / (ϕ1(i + 1) - ϕ1(i - 1)),
+            zero(eltype(s1d_in))
+        )
     end
 
-    for i in 2:(nz + 5)
-        if -δ²ϕ[i + 1] * δ²ϕ[i - 1] * abs(ϕ1[i + 1] - ϕ1[i - 1]) -
-           ϵ * min(abs(ϕ1[i + 1]), abs(ϕ1[i - 1])) > 0
-            η_tilde[i] = -(δ²ϕ[i + 1] - δ²ϕ[i - 1]) * (Δz^2) / (ϕ1[i + 1] - ϕ1[i - 1])
-        else
-            η_tilde[i] = 0
-        end
-    end
+    η(i) = clamp(η⁽¹⁾ * (η_tilde(i) - η⁽²⁾), 0, 1)
 
-    for i in 2:(nz + 5)
-        η[i] = max(0, min(η⁽¹⁾ * (η_tilde[i] - η⁽²⁾), 1))
-    end
+    ϕLᵈ(i) = ϕ1(i) + 1 / 2 * δₘϕ(i)
+    ϕRᵈ(i) = ϕ1(i + 1) + 1 / 2 * δₘϕ(i + 1)
 
-    for i in 2:(nz + 4)
-        ϕLᵈ[i] = ϕ1[i] + 1 / 2 * δₘϕ[i]
-        ϕRᵈ[i] = ϕ1[i + 1] + 1 / 2 * δₘϕ[i + 1]
-    end
-
-    for i in 2:(nz + 4)
-        ϕL[i] = ϕL[i] * (1 - η[i]) + ϕLᵈ[i] * η[i]
-        ϕR[i] = ϕR[i] * (1 - η[i]) + ϕRᵈ[i] * η[i]
-    end
+    ϕL₀(i) = ϕ₊½(i) * (1 - η(i)) + ϕLᵈ(i) * η(i)
+    ϕR₀(i) = ϕ₊½(i + 1) * (1 - η(i)) + ϕRᵈ(i) * η(i)
 
     ## Monotonicity examination
-    for i in 2:(nz + 4)
-        if (ϕR[i] - ϕ1[i]) * (ϕ1[i] - ϕL[i]) <= 0
-            ϕL[i] = ϕ1[i]
-            ϕR[i] = ϕ1[i]
-        elseif (ϕR[i] - ϕL[i]) * (ϕ1[i] - 1 / 2 * (ϕL[i] + ϕR[i])) >= (ϕR[i] - ϕL[i])^2 / 6
-            ϕL[i] = 3 * ϕ1[i] - 2 * ϕR[i]
-        elseif -(ϕR[i] - ϕL[i])^2 / 6 > (ϕR[i] - ϕL[i]) * (ϕ1[i] - 1 / 2 * (ϕR[i] + ϕL[i]))
-            ϕR[i] = 3 * ϕ1[i] - 2 * ϕL[i]
-        end
+    function ϕL(i)
+        ifelse((ϕR₀(i) - ϕ1(i)) * (ϕ1(i) - ϕL₀(i)) <= 0,
+            ϕ1(i),
+            ifelse(
+                (ϕR₀(i) - ϕL₀(i)) * (ϕ1(i) - 1 / 2 * (ϕL₀(i) + ϕR₀(i))) >=
+                (ϕR₀(i) - ϕL₀(i))^2 / 6,
+                3 * ϕ1(i) - 2 * ϕR₀(i),
+                ϕL₀(i)
+            ))
+    end
+
+    function ϕR(i)
+        ifelse((ϕR₀(i) - ϕ1(i)) * (ϕ1(i) - ϕL₀(i)) <= 0,
+            ϕ1(i),
+            ifelse(
+                -(ϕR₀(i) - ϕL₀(i))^2 / 6 >
+                (ϕR₀(i) - ϕL₀(i)) * (ϕ1(i) - 1 / 2 * (ϕR₀(i) + ϕL₀(i))),
+                3 * ϕ1(i) - 2 * ϕL₀(i),
+                ϕR₀(i)
+            ))
     end
 
     ## Compute flux
-    for i in 1:(nz + 1)
-        courant[i] = U[i] * Δt / Δz
+    courant(i) = U[i] * Δt / Δz
+
+    Δϕ(i) = ϕR(i) - ϕL(i)
+
+    ϕ₆(i) = 6 * (ϕ1(i) - 1 / 2 * (ϕL(i) + ϕR(i)))
+
+    function FLUX(i)
+        ifelse(U[i] >= 0,
+            courant(i) * (ϕR(i + 2) -
+             1 / 2 * courant(i) *
+             (Δϕ(i + 2) - (1 - 2 / 3 * courant(i)) * ϕ₆(i + 2))),
+            courant(i) * (ϕL(i + 3) -
+             1 / 2 * courant(i) *
+             (Δϕ(i + 3) - (1 + 2 / 3 * courant(i)) * ϕ₆(i + 3)))
+        )
     end
 
-    for i in 2:(nz + 4)
-        Δϕ[i] = ϕR[i] - ϕL[i]
-    end
-
-    for i in 2:(nz + 4)
-        ϕ₆[i] = 6 * (ϕ1[i] - 1 / 2 * (ϕL[i] + ϕR[i]))
-    end
-
-    for i in 3:(nz + 3)
-        if U[i - 2] >= 0
-            FLUX[i - 2] = courant[i - 2] * (ϕR[i] -
-                           1 / 2 * courant[i - 2] *
-                           (Δϕ[i] - (1 - 2 / 3 * courant[i - 2]) * ϕ₆[i]))
-        else
-            FLUX[i - 2] = courant[i - 2] * (ϕL[i + 1] -
-                           1 / 2 * courant[i - 2] *
-                           (Δϕ[i + 1] - (1 + 2 / 3 * courant[i - 2]) * ϕ₆[i + 1]))
-        end
-    end
-
-    for i in 4:(nz + 3)
-        ϕ2[i] = ϕ1[i] + (FLUX[i - 3] - FLUX[i - 2])
-    end
+    ϕ2(i) = ϕ1(i) + (FLUX(i - 3) - FLUX(i - 2))
 
     for i in 1:nz
-        s1d_out[i] = ϕ2[i + 3]
+        s1d_out[i] = ϕ2(i + 3)
     end
 
     return s1d_out
