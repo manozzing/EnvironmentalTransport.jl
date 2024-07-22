@@ -39,6 +39,9 @@ function l94_stencil(ϕ, U, Δt, Δz)
     max(zero(eltype(ϕ)), ϕ2(3))
 end
 
+" Return the left and right stencil size of the L94 stencil. "
+stencil_size(s::typeof(l94_stencil)) = (2, 2)
+
 """
 $(SIGNATURES)
 
@@ -135,6 +138,9 @@ function ppm_stencil(ϕ, U, Δt, Δz)
 
     ϕ2(4)
 end
+
+" Return the left and right stencil size of the PPM stencil. "
+stencil_size(s::typeof(ppm_stencil)) = (3, 4)
 
 """
 Advection in 2-D
