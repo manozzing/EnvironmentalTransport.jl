@@ -1,110 +1,114 @@
-export advect1d_l94, advect1d_ppm, advect2D
+export l94_stencil, ppm_stencil, advect2D
 
 """
+$(SIGNATURES)
+
 L94 advection in 1-D (Lin et al., 1994)
+
+* ϕ is the scalar field at the current time step, it should be a vector of length 5.
+* U is the velocity at both edges of the central grid cell, it should be a vector of length 2.
+* Δt is the length of the time step.
+* Δz is the grid spacing.
+
+The output will be the value of the central index (i.e. index 3) of the ϕ vector at the next time step.
 """
-function advect1d_l94(s1d_in::Vector{Float64}, U::Vector{Float64}, nz, Δt, Δz)
-    s1d_out = zeros(Float64, nz)
-
-    ## Initialization
-    ϕ1(i) = i < 3 ? s1d_in[1] : i > nz + 2 ? s1d_in[end] : s1d_in[i - 2]
-
-    δϕ1(i) = ϕ1(i) - ϕ1(i - 1)
+function l94_stencil(ϕ, U, Δt, Δz)
+    δϕ1(i) = ϕ[i] - ϕ[i - 1]
 
     Δϕ1_avg(i) = (δϕ1(i) + δϕ1(i + 1)) / 2.0
 
     ## Monotonicity slope limiter
-    ϕ1_min(i) = minimum((ϕ1(i - 1), ϕ1(i), ϕ1(i + 1)))
-    ϕ1_max(i) = maximum((ϕ1(i - 1), ϕ1(i), ϕ1(i + 1)))
+    ϕ1_min(i) = minimum((ϕ[i - 1], ϕ[i], ϕ[i + 1]))
+    ϕ1_max(i) = maximum((ϕ[i - 1], ϕ[i], ϕ[i + 1]))
     function Δϕ1_mono(i)
         sign(Δϕ1_avg(i)) *
-        minimum((abs(Δϕ1_avg(i)), 2 * (ϕ1(i) - ϕ1_min(i)),
-            2 * (ϕ1_max(i) - ϕ1(i))))
+        minimum((abs(Δϕ1_avg(i)), 2 * (ϕ[i] - ϕ1_min(i)),
+            2 * (ϕ1_max(i) - ϕ[i])))
     end
 
-    courant(i) = U[i] * Δt / (Δz)
+    courant(i) = U[i] * Δt / Δz
 
     function FLUX(i)
         ifelse(U[i] >= 0,
-            (U[i] * (ϕ1(i + 1) + Δϕ1_mono(i + 1) * (1 - courant(i)) / 2.0)),
-            (U[i] * (ϕ1(i + 2) - Δϕ1_mono(i + 2) * (1 + courant(i)) / 2.0)))
+            (U[i] * (ϕ[i + 1] + Δϕ1_mono(i + 1) * (1 - courant(i)) / 2.0)),
+            (U[i] * (ϕ[i + 2] - Δϕ1_mono(i + 2) * (1 + courant(i)) / 2.0)))
     end
 
-    ϕ2(i) = ϕ1(i) - Δt / Δz * (FLUX(i - 1) - FLUX(i - 2))
+    ϕ2(i) = ϕ[i] - Δt / Δz * (FLUX(i - 1) - FLUX(i - 2))
 
-    for i in 1:nz
-        s1d_out[i] = max(zero(eltype(s1d_in)), ϕ2(i + 2))
-    end
-
-    return s1d_out
+    max(zero(eltype(ϕ)), ϕ2(3))
 end
 
 """
+$(SIGNATURES)
+
 PPM advection in 1-D (Collela and Woodward, 1984)
+
+* ϕ is the scalar field at the current time step, it should be a vector of length 8 (3 cells on the left, the central cell, and 4 cells on the right).
+* U is the velocity at both edges of the central grid cell, it should be a vector of length 2.
+* Δt is the length of the time step.
+* Δz is the grid spacing.
+
+The output will be the value of the central index (i.e. index 4) of the ϕ vector at the next time step.
 """
-function advect1d_ppm(s1d_in::Vector{Float64}, U::Vector{Float64}, nz, Δt, Δz)
+function ppm_stencil(ϕ, U, Δt, Δz)
     ϵ = 0.01
     η⁽¹⁾ = 20
     η⁽²⁾ = 0.05
 
-    s1d_out = zeros(Float64, nz)
-
-    ## Initialization
-    ϕ1(i) = i < 4 ? s1d_in[1] : i > nz + 3 ? s1d_in[end] : s1d_in[i - 3]
-
     ## Edge value calculation
-    δϕ(i) = 1 / 2 * (ϕ1(i + 1) - ϕ1(i - 1))
+    δϕ(i) = 1 / 2 * (ϕ[i + 1] - ϕ[i - 1])
 
     function δₘϕ(i)
-        ifelse((ϕ1(i + 1) - ϕ1(i)) * (ϕ1(i) - ϕ1(i - 1)) > 0,
+        ifelse((ϕ[i + 1] - ϕ[i]) * (ϕ[i] - ϕ[i - 1]) > 0,
             min(
-                abs(δϕ(i - 1)), 2 * abs(ϕ1(i) - ϕ1(i - 1)), 2 * abs(ϕ1(i + 1) - ϕ1(i))) *
+                abs(δϕ(i - 1)), 2 * abs(ϕ[i] - ϕ[i - 1]), 2 * abs(ϕ[i + 1] - ϕ[i])) *
             sign(δϕ(i - 1)),
-            zero(eltype(s1d_in))
+            zero(eltype(ϕ))
         )
     end
 
-    ϕ₊½(i) = 1 / 2 * (ϕ1(i + 1) + ϕ1(i)) - 1 / 6 * (δₘϕ(i + 1) - δₘϕ(i))
+    ϕ₊½(i) = 1 / 2 * (ϕ[i + 1] + ϕ[i]) - 1 / 6 * (δₘϕ(i + 1) - δₘϕ(i))
 
     ## Discontinuity detection
-    δ²ϕ(i) = 1 / (6 * Δz^2) * (ϕ1(i + 1) - 2 * ϕ1(i) + ϕ1(i - 1))
+    δ²ϕ(i) = 1 / (6 * Δz^2) * (ϕ[i + 1] - 2 * ϕ[i] + ϕ[i - 1])
 
     function η_tilde(i)
         ifelse(
-            -δ²ϕ(i + 1) * δ²ϕ(i - 1) * abs(ϕ1(i + 1) - ϕ1(i - 1)) -
-            ϵ * min(abs(ϕ1(i + 1)), abs(ϕ1(i - 1))) > 0,
-            -(δ²ϕ(i + 1) - δ²ϕ(i - 1)) * (Δz^2) / (ϕ1(i + 1) - ϕ1(i - 1)),
-            zero(eltype(s1d_in))
+            -δ²ϕ(i + 1) * δ²ϕ(i - 1) * abs(ϕ[i + 1] - ϕ[i - 1]) -
+            ϵ * min(abs(ϕ[i + 1]), abs(ϕ[i - 1])) > 0,
+            -(δ²ϕ(i + 1) - δ²ϕ(i - 1)) * (Δz^2) / (ϕ[i + 1] - ϕ[i - 1]),
+            zero(eltype(ϕ))
         )
     end
 
     η(i) = clamp(η⁽¹⁾ * (η_tilde(i) - η⁽²⁾), 0, 1)
 
-    ϕLᵈ(i) = ϕ1(i) + 1 / 2 * δₘϕ(i)
-    ϕRᵈ(i) = ϕ1(i + 1) + 1 / 2 * δₘϕ(i + 1)
+    ϕLᵈ(i) = ϕ[i] + 1 / 2 * δₘϕ(i)
+    ϕRᵈ(i) = ϕ[i + 1] + 1 / 2 * δₘϕ(i + 1)
 
     ϕL₀(i) = ϕ₊½(i) * (1 - η(i)) + ϕLᵈ(i) * η(i)
     ϕR₀(i) = ϕ₊½(i + 1) * (1 - η(i)) + ϕRᵈ(i) * η(i)
 
     ## Monotonicity examination
     function ϕL(i)
-        ifelse((ϕR₀(i) - ϕ1(i)) * (ϕ1(i) - ϕL₀(i)) <= 0,
-            ϕ1(i),
+        ifelse((ϕR₀(i) - ϕ[i]) * (ϕ[i] - ϕL₀(i)) <= 0,
+            ϕ[i],
             ifelse(
-                (ϕR₀(i) - ϕL₀(i)) * (ϕ1(i) - 1 / 2 * (ϕL₀(i) + ϕR₀(i))) >=
+                (ϕR₀(i) - ϕL₀(i)) * (ϕ[i] - 1 / 2 * (ϕL₀(i) + ϕR₀(i))) >=
                 (ϕR₀(i) - ϕL₀(i))^2 / 6,
-                3 * ϕ1(i) - 2 * ϕR₀(i),
+                3 * ϕ[i] - 2 * ϕR₀(i),
                 ϕL₀(i)
             ))
     end
 
     function ϕR(i)
-        ifelse((ϕR₀(i) - ϕ1(i)) * (ϕ1(i) - ϕL₀(i)) <= 0,
-            ϕ1(i),
+        ifelse((ϕR₀(i) - ϕ[i]) * (ϕ[i] - ϕL₀(i)) <= 0,
+            ϕ[i],
             ifelse(
                 -(ϕR₀(i) - ϕL₀(i))^2 / 6 >
-                (ϕR₀(i) - ϕL₀(i)) * (ϕ1(i) - 1 / 2 * (ϕR₀(i) + ϕL₀(i))),
-                3 * ϕ1(i) - 2 * ϕL₀(i),
+                (ϕR₀(i) - ϕL₀(i)) * (ϕ[i] - 1 / 2 * (ϕR₀(i) + ϕL₀(i))),
+                3 * ϕ[i] - 2 * ϕL₀(i),
                 ϕR₀(i)
             ))
     end
@@ -114,7 +118,7 @@ function advect1d_ppm(s1d_in::Vector{Float64}, U::Vector{Float64}, nz, Δt, Δz)
 
     Δϕ(i) = ϕR(i) - ϕL(i)
 
-    ϕ₆(i) = 6 * (ϕ1(i) - 1 / 2 * (ϕL(i) + ϕR(i)))
+    ϕ₆(i) = 6 * (ϕ[i] - 1 / 2 * (ϕL(i) + ϕR(i)))
 
     function FLUX(i)
         ifelse(U[i] >= 0,
@@ -127,20 +131,16 @@ function advect1d_ppm(s1d_in::Vector{Float64}, U::Vector{Float64}, nz, Δt, Δz)
         )
     end
 
-    ϕ2(i) = ϕ1(i) + (FLUX(i - 3) - FLUX(i - 2))
+    ϕ2(i) = ϕ[i] + (FLUX(i - 3) - FLUX(i - 2))
 
-    for i in 1:nz
-        s1d_out[i] = ϕ2(i + 3)
-    end
-
-    return s1d_out
+    ϕ2(4)
 end
 
 """
 Advection in 2-D
 Using the output of 1-D advection, we implemented the non-directional splitting 2-D advection. -- LR96 approach (Lin and Rood 1996)
 """
-function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
+function advect2D(dt, nx, ny, s1, u, v, lons, lats, stencil)
 
     ### BC implementation -- Need to revisit here later
     s2d = zeros(nx + 4, ny + 4)
@@ -188,6 +188,14 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
     Re = 6378000
     dy = Re * (lats[2] - lats[1]) * π / 180
 
+    function advect1d(s1d_in, vel, dt, dx)
+        s1d_out = copy(s1d_in)
+        for i ∈ 3:length(s1d_out)-2
+            s1d_out[i] = stencil(s1d_in[i-2:i+2], vel[i-2:i-1], dt, dx)
+        end
+        s1d_out
+    end
+
     for j in 1:ny
         for i in 1:(nx + 4)
             s1d_xin[i] = s2d[i, j + 2]
@@ -196,10 +204,8 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
             vel_x1d[i] = u_edge[i, j]
         end
         dx = Re * cos(lats[j] * π / 180) * (lons[2] - lons[1]) * π / 180
-        s1d_xout = advect1d(s1d_xin, vel_x1d, nx, dt, dx)
 
-        s1d_xout = [
-            s1d_xout[begin], s1d_xout[begin], s1d_xout..., s1d_xout[end], s1d_xout[end]]
+        s1d_xout = advect1d(s1d_xin, vel_x1d, dt, dx)
 
         F_Q[:, j + 2] = s1d_xout[:]
     end
@@ -211,10 +217,7 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
         for j in 1:(ny + 1)
             vel_y1d[j] = v_edge[i, j]
         end
-        s1d_yout = advect1d(s1d_yin, vel_y1d, ny, dt, dy)
-        s1d_yout = [
-            s1d_yout[begin], s1d_yout[begin], s1d_yout..., s1d_yout[end], s1d_yout[end]]
-
+        s1d_yout = advect1d(s1d_yin, vel_y1d, dt, dy)
         G_Q[i + 2, :] = s1d_yout[:]
     end
 
@@ -226,9 +229,7 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
             vel_x1d[i] = u_edge[i, j]
         end
         dx = Re * cos(lats[j] * π / 180) * (lons[2] - lons[1]) * π / 180
-        s1d_xout = advect1d(s1d_xin, vel_x1d, nx, dt, dx)
-        s1d_xout = [
-            s1d_xout[begin], s1d_xout[begin], s1d_xout..., s1d_xout[end], s1d_xout[end]]
+        s1d_xout = advect1d(s1d_xin, vel_x1d, dt, dx)
 
         F_GQ[:, j + 2] = s1d_xout[:]
     end
@@ -240,10 +241,8 @@ function advect2D(dt, nx, ny, s1, u, v, lons, lats, advect1d)
         for j in 1:(ny + 1)
             vel_y1d[j] = v_edge[i, j]
         end
-        s1d_yout = advect1d(s1d_yin, vel_y1d, ny, dt, dy)
-        s1d_yout = [
-            s1d_yout[begin], s1d_yout[begin], s1d_yout..., s1d_yout[end], s1d_yout[end]]
-
+        s1d_yout = advect1d(s1d_yin, vel_y1d, dt, dy)
+        
         G_FQ[i + 2, :] = s1d_yout[:]
     end
 

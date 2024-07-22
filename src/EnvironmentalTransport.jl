@@ -1,5 +1,6 @@
 module EnvironmentalTransport
 
+using DocStringExtensions
 using Tullio
 
 include("horizontal_advection.jl")
