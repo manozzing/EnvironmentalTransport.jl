@@ -39,7 +39,7 @@ end
     c = reshape(1.0:*(nv, nx, ny, nz), nv, nx, ny, nz)
     u = (1.0:(nx + 1)) .- 3
 
-    tensor_adv_x = tensor_advection_op(Float64, (nv, nx, ny, nz), 2, ppm_stencil,
+    tensor_adv_x, _ = tensor_advection_op(Float64, (nv, nx, ny, nz), 2, ppm_stencil,
         (i, j, t) -> u[i], (i, j, t) -> Δz, Δt
     )
 

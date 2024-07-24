@@ -4,6 +4,7 @@ using DocStringExtensions
 using Tullio
 using SciMLOperators
 using LinearAlgebra
+using EarthSciMLBase, EarthSciData
 
 include("advection_stencils.jl")
 include("boundary_conditions.jl")

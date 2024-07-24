@@ -12,6 +12,11 @@ back into the orinal order. So if `op` is the operator and
  `u` is the original tensor, then: `x = op * u[:]` returns
 the reordered tensor `x`, and `u_prime = inv(op) * x` returns
 a vector version of the orginal tensor, so `uprime == u[:]`.
+
+This function returns the operator and also a function `idx_f` that takes a 
+column number of the transformed matrix as an input and returns a vector of 
+`CartesianIndex`es in the original tensfor that make up that transformed matrix
+column.
 """
 function orderby_op(dtype, shape::AbstractVector, index::Int)
     vec_length = *(shape...)
@@ -26,8 +31,12 @@ function orderby_op(dtype, shape::AbstractVector, index::Int)
     function rev(u, p, t)
         permutedims(reshape(u, newshape...), rev_idx)[:]
     end
+    idx_all = reshape(1:vec_length, shape...)
+    c_ii = CartesianIndices(idx_all)
+    idx_reshaped = fwd(idx_all, nothing, nothing)
+    idx_f(col) = c_ii[idx_reshaped[:, col]] # function to transform the indexes
+    idx_f(row, col) = c_ii[idx_reshaped[:, col]][row] # function to transform the indexes
     x = zeros(dtype, shape[1], Int(vec_length / shape[1]))
-    y = zeros(dtype, shape[index], Int(vec_length / shape[index]))
     FunctionOperator(fwd, x, x; op_adjoint = rev, op_inverse = rev,
-        op_adjoint_inverse = fwd, islinear = true)
+        op_adjoint_inverse = fwd, islinear = true), idx_f
 end
