@@ -3,8 +3,12 @@ module EnvironmentalTransport
 using DocStringExtensions
 using Tullio
 using SciMLOperators
+using LinearAlgebra
 
-include("horizontal_advection.jl")
+include("advection_stencils.jl")
+include("boundary_conditions.jl")
+include("orderby.jl")
+include("advection.jl")
 include("advect1d_vertical.jl")
 
 end
