@@ -10,7 +10,11 @@ L94 advection in 1-D (Lin et al., 1994)
 * Δt is the length of the time step.
 * Δz is the grid spacing.
 
-The output will be the value of the central index (i.e. index 3) of the ϕ vector at the next time step.
+The output will be time derivative of the central index (i.e. index 3) 
+of the ϕ vector (i.e. dϕ/dt).
+
+(The output is dependent on the Courant number, which depends on Δt, so Δt needs to be
+an input to the function.)
 """
 function l94_stencil(ϕ, U, Δt, Δz)
     δϕ1(i) = ϕ[i] - ϕ[i - 1]
@@ -34,9 +38,9 @@ function l94_stencil(ϕ, U, Δt, Δz)
             (U[i] * (ϕ[i + 2] - Δϕ1_mono(i + 2) * (1 + courant(i)) / 2.0)))
     end
 
-    ϕ2(i) = ϕ[i] - Δt / Δz * (FLUX(i - 1) - FLUX(i - 2))
+    ϕ2(i) = - (FLUX(i - 1) - FLUX(i - 2)) / Δz
 
-    max(zero(eltype(ϕ)), ϕ2(3))
+    ϕ2(3)
 end
 
 " Return the left and right stencil size of the L94 stencil. "
@@ -52,7 +56,11 @@ PPM advection in 1-D (Collela and Woodward, 1984)
 * Δt is the length of the time step.
 * Δz is the grid spacing.
 
-The output will be the value of the central index (i.e. index 4) of the ϕ vector at the next time step.
+The output will be time derivative of the central index (i.e. index 4) 
+of the ϕ vector (i.e. dϕ/dt).
+
+(The output is dependent on the Courant number, which depends on Δt, so Δt needs to be
+an input to the function.)
 """
 function ppm_stencil(ϕ, U, Δt, Δz)
     ϵ = 0.01
@@ -134,7 +142,7 @@ function ppm_stencil(ϕ, U, Δt, Δz)
         )
     end
 
-    ϕ2(i) = ϕ[i] + (FLUX(i - 3) - FLUX(i - 2))
+    ϕ2(i) = (FLUX(i - 3) - FLUX(i - 2)) / Δt
 
     ϕ2(4)
 end
