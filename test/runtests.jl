@@ -7,4 +7,5 @@ using Test, SafeTestsets
     @safetestset "Order By" begin include("orderby_test.jl") end
     @safetestset "Advection" begin include("advection_test.jl") end
     @safetestset "Vertical Advection" begin include("advect1d_vertical_test.jl") end
+    @safetestset "Advection Simulator" begin include("advection_simulator_test.jl") end
 end

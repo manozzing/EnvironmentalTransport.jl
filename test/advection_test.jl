@@ -39,13 +39,55 @@ end
     c = reshape(1.0:*(nv, nx, ny, nz), nv, nx, ny, nz)
     u = (1.0:(nx + 1)) .- 3
 
-    tensor_adv_x, _ = tensor_advection_op(Float64, (nv, nx, ny, nz), 2, ppm_stencil,
-        (i, j, t) -> u[i], (i, j, t) -> Δz, Δt
-    )
+    op_f, _ = tensor_advection_op(Float64, (nv, nx, ny, nz), 2, ppm_stencil)
+    tensor_adv_x = op_f((i, j, t) -> u[i], (i, j, t) -> Δz, Δt)
 
     runf(c) = c[:] + (tensor_adv_x * c[:]) .* Δt
 
-    @test norm(runf(c[:])) ≈ 665.961920833316
-    @test norm(runf(runf(c[:]))) ≈ 582.6715980721902
-    @test norm(runf(runf(runf(c[:])))) ≈ 511.3511651771215
+    # Norm decreases as pollution spreads out.
+    @test norm(runf(c[:])) ≈ 686.4747336938192
+    @test norm(runf(runf(c[:]))) ≈ 617.1569463272692
+    @test norm(runf(runf(runf(c[:])))) ≈ 554.9089673126576
+end
+
+nv = 2
+nx = 4
+ny = 5
+nz = 6
+c = zeros(nv, nx, ny, nz)
+c[2, 2, 3, 4] = 1.0
+
+@testset "Advection X" begin
+    op_f, _ = tensor_advection_op(Float64, (nv, nx, ny, nz), 2, ppm_stencil)
+    tensor_adv_x = op_f((i, j, t) -> 1, (i, j, t) -> Δz, Δt)
+
+    c1 = tensor_adv_x * c[:]
+    c1_want = zeros(nv, nx, ny, nz)
+    c1_want[2, 2, 3, 4] = -2
+    c1_want[2, 3, 3, 4] = 2
+    @test c1 ≈ c1_want[:]
+end
+
+@testset "Advection Y" begin
+    op_f, _ = tensor_advection_op(Float64, (nv, nx, ny, nz), 3, ppm_stencil)
+    tensor_adv_y = op_f((i, j, t) -> 1, (i, j, t) -> Δz, Δt)
+
+    c1 = tensor_adv_y * c[:]
+
+    c1_want = zeros(nv, nx, ny, nz)
+    c1_want[2, 2, 3, 4] = -2
+    c1_want[2, 2, 4, 4] = 2
+
+    @test c1 ≈ c1_want[:]
+end
+
+@testset "Advection Z" begin
+    op_f, _ = tensor_advection_op(Float64, (nv, nx, ny, nz), 4, ppm_stencil)
+    tensor_adv_z = op_f((i, j, t) -> 1, (i, j, t) -> Δz, Δt)
+
+    c1 = tensor_adv_z * c[:]
+    c1_want = zeros(nv, nx, ny, nz)
+    c1_want[2, 2, 3, 4] = -2
+    c1_want[2, 2, 3, 5] = 2
+    @test c1 ≈ c1_want[:]
 end

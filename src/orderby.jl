@@ -26,11 +26,13 @@ function orderby_op(dtype, shape::AbstractVector, index::Int)
     function fwd(u, p, t)
         reshape(permutedims(reshape(u, shape...), fwd_idx), shape[index], :)
     end
+    fwd(du, u, p, t) = du[:] .= fwd(u, p, t)[:]
     newshape = tuple(shape[[index, iiremainder...]]...)
     rev_idx = tuple(insert!(collect(2:length(shape)), index, 1)...)
     function rev(u, p, t)
         permutedims(reshape(u, newshape...), rev_idx)[:]
     end
+    rev(du, u, p, t) = du[:] .= rev(u, p, t)[:]
     idx_all = reshape(1:vec_length, shape...)
     c_ii = CartesianIndices(idx_all)
     idx_reshaped = fwd(idx_all, nothing, nothing)
@@ -38,5 +40,6 @@ function orderby_op(dtype, shape::AbstractVector, index::Int)
     idx_f(row, col) = c_ii[idx_reshaped[:, col]][row] # function to transform the indexes
     x = zeros(dtype, shape[1], Int(vec_length / shape[1]))
     FunctionOperator(fwd, x, x; op_adjoint = rev, op_inverse = rev,
-        op_adjoint_inverse = fwd, islinear = true), idx_f
+        op_adjoint_inverse = fwd, islinear = true, p = NullParameters()),
+    idx_f
 end
