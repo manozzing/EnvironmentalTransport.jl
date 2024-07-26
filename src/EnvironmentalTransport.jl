@@ -2,7 +2,7 @@ module EnvironmentalTransport
 
 using DocStringExtensions
 using Tullio
-using SciMLOperators
+using SciMLOperators, OrdinaryDiffEq
 using LinearAlgebra
 using SciMLBase: NullParameters
 using EarthSciMLBase, EarthSciData

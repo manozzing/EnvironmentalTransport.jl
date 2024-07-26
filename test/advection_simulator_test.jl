@@ -1,19 +1,18 @@
 using EnvironmentalTransport
-using EnvironmentalTransport: get_vf, get_Δ
+using EnvironmentalTransport: get_vf, get_Δ, orderby_op
 
 using Test
+using EarthSciMLBase, EarthSciData
 using ModelingToolkit, DomainSets, OrdinaryDiffEq
-using Distributions
+using Distributions, LinearAlgebra
 using Dates
-using Plots
-
 
 @parameters lon=0.0 lat=0.0 lev=1.0 t
 lat = GlobalScope(lat)
 lon = GlobalScope(lon)
 lev = GlobalScope(lev)
 starttime = datetime2unix(DateTime(2022, 5, 1))
-endtime = datetime2unix(DateTime(2022, 5, 1, 3))
+endtime = datetime2unix(DateTime(2022, 5, 1, 1, 0, 5))
 
 geosfp = GEOSFP("4x5", t; dtype = Float64)
 
@@ -28,7 +27,7 @@ domain = DomainInfo(
 
 function emissions(t, μ_lon, μ_lat, σ)
     @variables c(t) = 0.0
-    dist = MvNormal([starttime, μ_lon, μ_lat, 1], [3600.0, σ, σ, 1])
+    dist =MvNormal([starttime, μ_lon, μ_lat, 1], Diagonal(map(abs2, [3600.0, σ, σ, 1])))
     D = Differential(t)
     ODESystem([D(c) ~ pdf(dist, [t, lon, lat, lev]) * 50],
         t, name = :Test₊emissions)
@@ -39,75 +38,57 @@ output = NetCDFOutputter("out.nc", 3600.0)
 
 csys = couple(emis, domain, geosfp, output)
 
-sim = Simulator(csys, [deg2rad(2), deg2rad(2), 1], Tsit5())
+sim = Simulator(csys, [deg2rad(4), deg2rad(4), 1], Tsit5())
 
 run!(sim)
 
+@test norm(sim.u) ≈ 451.09230204187736
 
-pvaridx = findfirst(
-    isequal("lon"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
-_, idx_f = orderby_op(
-    EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
+op = AdvectionOperator(100.0, l94_stencil, SSPRK22())
 
-@test get_vf(sim, "lon", gfp_vars, idx_f)(2, 3, starttime) ≈ -0.8947638543146277
-
-pvaridx = findfirst(
-    isequal("lat"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
-_, idx_f = orderby_op(
-    EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
-
-@test get_vf(sim, "lat", gfp_vars, idx_f)(2, 3, starttime) ≈ 3.820172123212213
-
-pvaridx = findfirst(
-    isequal("lev"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
-_, idx_f = orderby_op(
-    EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
-
-@test get_vf(sim, "lev", gfp_vars, idx_f)(2, 3, starttime) ≈ -0.006279307244207394
-
-
-
-@test get_Δ(sim, "lat")(2, 3, starttime) ≈ 222640.0
-@test get_Δ(sim, "lon")(2, 3, starttime) ≈ 216258.51915425804
-@test get_Δ(sim, "lev")(2, 3, starttime) ≈ -1526.087459321192
-
-
-
-
-
-op = AdvectionOperator(100.0, SSPRK22())
-
-EarthSciMLBase.initialize!(op, sim)
+@test isnothing(op.vardict) # Before coupling, there shouldn't be anything here.
 
 csys = couple(csys, op)
 
-sim = Simulator(csys, [deg2rad(2), deg2rad(2), 1], Tsit5())
+@test !isnothing(op.vardict) # after coupling, there should be something here.
 
 run!(sim)
 
-@profview EarthSciMLBase.run!(op, sim, starttime, op.Δt)
+# With advection, the norm should be lower because the pollution is more spread out.
+@test norm(sim.u) ≈ 330.19092435836507 
 
-du = op.op(sim.u[:], nothing, starttime)
-heatmap(reshape(du, size(sim.u)...)[1, :, :, 1]')
-op.op = cache_operator(op.op, sim.du[:])
-op.op(sim.du[:], sim.u[:], NullParameters(), starttime)
+@testset "get_vf lon" begin
+    pvaridx = findfirst(
+        isequal("lon"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
+    _, idx_f = orderby_op(
+        EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
 
-prob = ODEProblem(op.op, sim.u[:], (starttime, endtime))
-solve(prob, SSPRK22(), dt = op.dt)
+    @test get_vf(sim, "lon", sim.obs_fs[sim.obs_fs_idx[op.vardict["lon"]]], idx_f)(
+        2, 3, starttime) ≈-0.8448177656085027
+end
 
-lat_adv = simulator_advection_1d(sim, "lat", gfp_vars)
-lon_adv = simulator_advection_1d(sim, "lon", gfp_vars)
-lev_adv = simulator_advection_1d(sim, "lev", gfp_vars)
+@testset "get_vf lat" begin
+    pvaridx = findfirst(
+        isequal("lat"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
+    _, idx_f = orderby_op(
+        EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
 
-Δt = 300.0
-du_lat = lat_adv(sim.u[:], nothing, starttime) .* Δt
-du_lon = lon_adv(sim.u[:], nothing, starttime) .* Δt
-du_lev = lev_adv(sim.u[:], nothing, starttime) .* Δt
-plot(
-    heatmap(sim.u[1, :, :, 1]', title = "U"),
-    heatmap(reshape(du_lon, size(sim.u)...)[1, :, :, 1]', title = "lon"),
-    heatmap(reshape(du_lat, size(sim.u)...)[1, :, :, 1]', title = "lat"),
-    heatmap(reshape(du_lev, size(sim.u)...)[1, :, :, 2]', title = "lev")
-)
+    @test get_vf(sim, "lat", sim.obs_fs[sim.obs_fs_idx[op.vardict["lat"]]], idx_f)(
+        2, 3, starttime) ≈ 3.8061048027295152
+end
 
-heatmap(sim.u[1, :, :, 1])
+@testset "get_vf lev" begin
+    pvaridx = findfirst(
+        isequal("lev"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
+    _, idx_f = orderby_op(
+        EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
+
+    @test get_vf(sim, "lev", sim.obs_fs[sim.obs_fs_idx[op.vardict["lev"]]], idx_f)(
+        2, 3, starttime) ≈ -0.006329571396093452
+end
+
+@testset "get_Δ" begin
+    @test get_Δ(sim, "lat")(2, 3, starttime) ≈ 445280.0
+    @test get_Δ(sim, "lon")(2, 3, starttime) ≈ 424080.6852300487
+    @test get_Δ(sim, "lev")(2, 3, starttime) ≈ -1526.0725231324905
+end

@@ -159,7 +159,7 @@ function get_vf(sim, varname::AbstractString, data_f, idx_f)
     elseif varname == "lev"
         return (i, j, t) -> begin
             idx = idx_f(min(i, size(sim.u, pvaridx + 1)), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
-            vf(t,
+            data_f(t,
                 sim.grid[1][idx[2]],
                 sim.grid[2][idx[3]],
                 idx[4] > 1 ? sim.grid[3][idx[4]] - sim.Δs[3] / 2 : sim.grid[3][idx[4]] # Staggered grid 
@@ -200,7 +200,8 @@ Create a 1D advection SciMLOperator for the given variable name `varname`.
 possible `varname`s and values that are the corresponding variables in the
 ODESystem that should be used to get the wind velocity values.
 """
-function simulator_advection_1d(sim::EarthSciMLBase.Simulator, varname)
+function simulator_advection_1d(
+        sim::EarthSciMLBase.Simulator, op, varname)
     pvaridx = findfirst( # Get the index of the variable in the domaininfo
         isequal(varname), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
 
@@ -208,10 +209,10 @@ function simulator_advection_1d(sim::EarthSciMLBase.Simulator, varname)
         EarthSciMLBase.utype(sim.domaininfo),
         size(sim.u),
         1 + pvaridx,
-        ppm_stencil
+        op.stencil
     )
 
-    data_f = sim.obs_fs[sim.obs_fs_idx[obs.vardict[varname]]]
+    data_f = sim.obs_fs[sim.obs_fs_idx[op.vardict[varname]]]
     op_f(
         get_vf(sim, varname, data_f, idx_f),
         get_Δ(sim, varname),
@@ -223,20 +224,24 @@ end
 $(SIGNATURES)
 
 Create an `EarthSciMLBase.Operator` that performs advection. `Δt` is the time step size
-and `alg` is the ODE solver algorithm to use. Any additional keyword arguments are passed
+and `alg` is the ODE solver algorithm to use. 
+Advection is performed using the given `stencil` operator 
+(e.g. `l94_stencil` or `ppm_stencil`). 
+Any additional keyword arguments are passed
 to the ODEProblem and ODEIntegrator constructors.
 """
 mutable struct AdvectionOperator <: EarthSciMLBase.Operator
     op::Any
     Δt::Any
+    stencil::Any
     vardict::Any
     prob::Any
     integrator::Any
     algorithm::Any
     kwargs::Any
 
-    function AdvectionOperator(Δt, alg; kwargs...)
-        new(nothing, Δt, nothing, nothing, nothing, alg, kwargs)
+    function AdvectionOperator(Δt, stencil, alg; kwargs...)
+        new(nothing, Δt, stencil, nothing, nothing, nothing, alg, kwargs)
     end
 end
 
@@ -246,11 +251,11 @@ function EarthSciMLBase.initialize!(op::AdvectionOperator, s::Simulator)
     pvars = EarthSciMLBase.pvars(s.domaininfo)
     pvarstrs = [String(Symbol(pv)) for pv in pvars]
     # Create advection operators in each of the three dimensions and add them together.
-    op.op = +([simulator_advection_1d(sim, pv) for pv in pvarstrs]...)
+    op.op = +([simulator_advection_1d(s, op, pv) for pv in pvarstrs]...)
     op.op = cache_operator(op.op, s.u[:])
 
     start, finish = EarthSciMLBase.time_range(s.domaininfo)
-    op.prob = ODEProblem(op.op, sim.u[:], (start, finish); dt = op.Δt, op.kwargs...)
+    op.prob = ODEProblem(op.op, s.u[:], (start, finish); dt = op.Δt, op.kwargs...)
     op.integrator = init(op.prob, op.algorithm, save_on = false,
         save_start = false, save_end = false, initialize_save = false; op.kwargs...)
     nothing
@@ -273,7 +278,7 @@ This function mutates the operator to add the windfield variables.
 There must already be a source of wind data in the coupled system for this to work.
 Currently the only valid source of wind data is `EarthSciData.GEOSFP`.
 """
-function couple(c::CoupledSystem, op::AdvectionOperator)::CoupledSystem
+function EarthSciMLBase.couple(c::CoupledSystem, op::AdvectionOperator)::CoupledSystem
     found = 0
     for sys in c.systems
         if EarthSciMLBase.systemhash(sys) == :EarthSciData₊GEOSFP

@@ -2,6 +2,7 @@ using EnvironmentalTransport: advect_1d_op, tensor_advection_op
 using EnvironmentalTransport
 using Test
 using LinearAlgebra
+using SciMLBase: NullParameters
 
 c = [0.0, 1, 2, 3, 4, 5]
 v = [10.0, 8, 6, 4, 2, 0, 1]
@@ -12,21 +13,21 @@ v = [10.0, 8, 6, 4, 2, 0, 1]
     c2 = [c[1], c[1], c[1], c..., c[end], c[end], c[end], c[end]]
     adv_op = advect_1d_op(
         Float64, (length(c),), ppm_stencil, (i, t) -> v[i], (i, t) -> Δz, Δt)
-    result = adv_op(c2, nothing, nothing)
+    result = adv_op(c2, NullParameters(), nothing)
     @test result ≈ [0.0, -12, -4, 4, 12, -10.0]
 
     result .= 0
-    adv_op(result, c2, nothing, 1.0)
+    adv_op(result, c2, NullParameters(), 1.0)
     @test result ≈ [0.0, -12, -4, 4, 12, -10.0]
 
     c3 = repeat(c2, 1, 3)
     adv_op = advect_1d_op(Float64, (length(c), 3), ppm_stencil,
         (i, j, t) -> v[i], (i, j, t) -> Δz, Δt)
-    result = adv_op(c3, nothing, nothing)
+    result = adv_op(c3, NullParameters(), nothing)
     @test result ≈ repeat([0.0, -12, -4, 4, 12, -10.0], 1, 3)
 
     result .= 0
-    adv_op(result, c3, nothing, 1.0)
+    adv_op(result, c3, NullParameters(), 1.0)
     @test result ≈ repeat([0.0, -12, -4, 4, 12, -10.0], 1, 3)
 end
 
