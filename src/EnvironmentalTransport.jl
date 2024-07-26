@@ -11,6 +11,5 @@ include("advection_stencils.jl")
 include("boundary_conditions.jl")
 include("orderby.jl")
 include("advection.jl")
-include("advect1d_vertical.jl")
 
 end

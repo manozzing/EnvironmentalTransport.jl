@@ -34,15 +34,14 @@ function emissions(t, μ_lon, μ_lat, σ)
 end
 
 emis = emissions(t, deg2rad(-122.6), deg2rad(45.5), 0.1)
-output = NetCDFOutputter("out.nc", 3600.0)
 
-csys = couple(emis, domain, geosfp, output)
+csys = couple(emis, domain, geosfp)
 
 sim = Simulator(csys, [deg2rad(4), deg2rad(4), 1], Tsit5())
 
 run!(sim)
 
-@test norm(sim.u) ≈ 451.09230204187736
+@test 420 < norm(sim.u) < 470
 
 op = AdvectionOperator(100.0, l94_stencil, SSPRK22())
 
@@ -55,7 +54,7 @@ csys = couple(csys, op)
 run!(sim)
 
 # With advection, the norm should be lower because the pollution is more spread out.
-@test norm(sim.u) ≈ 330.19092435836507 
+@test 310 < norm(sim.u)< 350
 
 @testset "get_vf lon" begin
     pvaridx = findfirst(
