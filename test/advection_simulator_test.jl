@@ -14,7 +14,8 @@ lev = GlobalScope(lev)
 starttime = datetime2unix(DateTime(2022, 5, 1))
 endtime = datetime2unix(DateTime(2022, 5, 1, 1, 0, 5))
 
-geosfp = GEOSFP("4x5", t; dtype = Float64)
+geosfp = GEOSFP("4x5", t; dtype = Float64,
+    coord_defaults = Dict(:lon => 0.0, :lat => 0.0, :lev => 1.0))
 
 domain = DomainInfo(
     [partialderivatives_δxyδlonlat,
@@ -27,7 +28,7 @@ domain = DomainInfo(
 
 function emissions(t, μ_lon, μ_lat, σ)
     @variables c(t) = 0.0
-    dist =MvNormal([starttime, μ_lon, μ_lat, 1], Diagonal(map(abs2, [3600.0, σ, σ, 1])))
+    dist = MvNormal([starttime, μ_lon, μ_lat, 1], Diagonal(map(abs2, [3600.0, σ, σ, 1])))
     D = Differential(t)
     ODESystem([D(c) ~ pdf(dist, [t, lon, lat, lev]) * 50],
         t, name = :Test₊emissions)
@@ -54,7 +55,7 @@ csys = couple(csys, op)
 run!(sim)
 
 # With advection, the norm should be lower because the pollution is more spread out.
-@test 310 < norm(sim.u)< 350
+@test 310 < norm(sim.u) < 350
 
 @testset "get_vf lon" begin
     pvaridx = findfirst(
@@ -63,7 +64,7 @@ run!(sim)
         EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
 
     @test get_vf(sim, "lon", sim.obs_fs[sim.obs_fs_idx[op.vardict["lon"]]], idx_f)(
-        2, 3, starttime) ≈-0.8448177656085027
+        2, 3, starttime) ≈ -0.8448177656085027
 end
 
 @testset "get_vf lat" begin
