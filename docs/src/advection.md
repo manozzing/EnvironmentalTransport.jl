@@ -1,18 +1,22 @@
+# Numerical Advection Operator
 
+
+
+```@example adv
 using EnvironmentalTransport
 using EarthSciMLBase, EarthSciData
-using ModelingToolkit, DomainSets, OrdinaryDiffEq
+using ModelingToolkit, DomainSets, DifferentialEquations
 using Distributions, LinearAlgebra
 using Dates
+using NCDatasets, Plots
 
 @parameters lon=0.0 lat=0.0 lev=1.0 t
-lat = GlobalScope(lat)
-lon = GlobalScope(lon)
-lev = GlobalScope(lev)
-starttime = datetime2unix(DateTime(2022, 5, 1))
-endtime = datetime2unix(DateTime(2022, 5, 1, 1, 0, 5))
+starttime = datetime2unix(DateTime(2022, 5, 1, 0, 0))
+endtime = datetime2unix(DateTime(2022, 5, 1, 3, 0))
 
-geosfp = GEOSFP("4x5", t; dtype = Float64)
+# Need to add coord_defaults or it won't work.
+geosfp = GEOSFP("4x5", t; dtype = Float64,
+    coord_defaults = Dict(:lon => 0.0, :lat => 0.0, :lev => 1.0))
 
 domain = DomainInfo(
     [partialderivatives_δxyδlonlat,
@@ -21,7 +25,7 @@ domain = DomainInfo(
     constBC(16.0,
         lon ∈ Interval(deg2rad(-130.0), deg2rad(-60.0)),
         lat ∈ Interval(deg2rad(9.75), deg2rad(60.0)),
-        lev ∈ Interval(1, 3)))
+        lev ∈ Interval(1, 15)))
 
 function emissions(t, μ_lon, μ_lat, σ)
     @variables c(t) = 0.0
@@ -32,22 +36,30 @@ function emissions(t, μ_lon, μ_lat, σ)
 end
 
 emis = emissions(t, deg2rad(-122.6), deg2rad(45.5), 0.1)
-output = NetCDFOutputter("out.nc", 3600.0)
+outfile = tempname() * ".nc"
+output = NetCDFOutputter(outfile, 3600.0)
 
+adv = AdvectionOperator(600.0, l94_stencil, SSPRK22())
+
+# Make sure that geos-fp is added first
 csys = couple(emis, domain, geosfp, output)
+
+csys = couple(csys, adv)
 
 sim = Simulator(csys, [deg2rad(4), deg2rad(4), 1], Tsit5())
 
 run!(sim)
 
-@test norm(sim.u) ≈ 451.09230204187736
+ds = NCDataset(outfile, "r")
 
-op = AdvectionOperator(100.0, l94_stencil, SSPRK22())
 
-@test isnothing(op.vardict) # Before coupling, there shouldn't be anything here.
+anim = @animate for i ∈ 1:size(ds["Test₊emissions₊c"])[4]
+    plot(
+        heatmap(ds["Test₊emissions₊c"][:, :, 1, i]', title="Ground-Level"),
+        heatmap(ds["Test₊emissions₊c"][:, 10, :, i]', title="Vertical Cross-Section"),
+    )
+end
+gif(anim, fps = 15)
 
-csys = couple(csys, op)
-
-@test !isnothing(op.vardict) # after coupling, there should be something here.
-
-run!(sim)
+rm(outfile, force=true)
+```
