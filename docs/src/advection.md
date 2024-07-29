@@ -68,7 +68,7 @@ geosfp = GEOSFP("4x5", t; dtype = Float64,
     coord_defaults = Dict(:lon => 0.0, :lat => 0.0, :lev => 1.0))
 
 
-outfile = tempname() * ".nc"
+outfile = "out.nc"
 output = NetCDFOutputter(outfile, 3600.0)
 
 csys = couple(emis, domain, geosfp, output) 
