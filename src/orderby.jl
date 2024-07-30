@@ -18,7 +18,7 @@ column number of the transformed matrix as an input and returns a vector of
 `CartesianIndex`es in the original tensfor that make up that transformed matrix
 column.
 """
-function orderby_op(dtype, shape::AbstractVector, index::Int)
+function orderby_op(dtype, shape::AbstractVector, index::Int; p=NullParameters())
     vec_length = *(shape...)
     ii = 1:length(shape)
     iiremainder = setdiff(ii, index)
@@ -40,6 +40,6 @@ function orderby_op(dtype, shape::AbstractVector, index::Int)
     idx_f(row, col) = c_ii[idx_reshaped[:, col]][row] # function to transform the indexes
     x = zeros(dtype, shape[1], Int(vec_length / shape[1]))
     FunctionOperator(fwd, x, x; op_adjoint = rev, op_inverse = rev,
-        op_adjoint_inverse = fwd, islinear = true, p = NullParameters()),
+        op_adjoint_inverse = fwd, islinear = true, p = p),
     idx_f
 end

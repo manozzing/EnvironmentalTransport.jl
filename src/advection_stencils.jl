@@ -16,7 +16,7 @@ of the ϕ vector (i.e. dϕ/dt).
 (The output is dependent on the Courant number, which depends on Δt, so Δt needs to be
 an input to the function.)
 """
-function l94_stencil(ϕ, U, Δt, Δz)
+function l94_stencil(ϕ, U, Δt, Δz; kwargs...)
     δϕ1(i) = ϕ[i] - ϕ[i - 1]
 
     Δϕ1_avg(i) = (δϕ1(i) + δϕ1(i + 1)) / 2.0
@@ -62,7 +62,7 @@ of the ϕ vector (i.e. dϕ/dt).
 (The output is dependent on the Courant number, which depends on Δt, so Δt needs to be
 an input to the function.)
 """
-function ppm_stencil(ϕ, U, Δt, Δz)
+function ppm_stencil(ϕ, U, Δt, Δz; kwargs...)
     ϵ = 0.01
     η⁽¹⁾ = 20
     η⁽²⁾ = 0.05

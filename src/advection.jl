@@ -22,25 +22,26 @@ Arguments:
             where `i` is a grid index, `j` is the column index
             (where `max(i) == shape(2)`)`, and `t` is time.
     * `Δt`: The time step size, which is assumed to be fixed.
+    * `p`: Optional parameters to pass to the stencil function.
 """
-function advect_1d_op(dtype, shape, stencil, v_f, Δx_f, Δt)
+function advect_1d_op(dtype, shape, stencil, v_f, Δx_f, Δt; p=NullParameters())
     lpad, rpad = stencil_size(stencil)
     function f(u::AbstractVector, p, t) # Out-of-place, vector
         [stencil(u[(i - lpad):(i + rpad)],
-             (v_f(i - lpad, t), v_f(i - lpad + 1, t)), Δt, Δx_f(i - lpad, t))
+             (v_f(i - lpad, t), v_f(i - lpad + 1, t)), Δt, Δx_f(i - lpad, t), p=p)
          for i in (firstindex(u) + lpad):(lastindex(u) - rpad)]
     end
     function f(du::AbstractVector, u::AbstractVector, p, t) # In-place, vector
         for i in (firstindex(u) + lpad):(lastindex(u) - rpad)
             du[i - lpad] = stencil(
                 u[(i - lpad):(i + rpad)], (v_f(i - lpad, t), v_f(i - lpad + 1, t)), Δt, Δx_f(
-                    i - lpad, t))
+                    i - lpad, t), p=p)
         end
         du
     end
     function f(u::AbstractMatrix, p, t) # Out-of-place, matrix
         hcat([[stencil(col[(i - lpad):(i + rpad)],
-                   (v_f(i - lpad, j, t), v_f(i - lpad + 1, j, t)), Δt, Δx_f(i - lpad, j, t))
+                   (v_f(i - lpad, j, t), v_f(i - lpad + 1, j, t)), Δt, Δx_f(i - lpad, j, t), p=p)
                for i in (firstindex(col) + lpad):(lastindex(col) - rpad)]
               for (j, col) in enumerate(eachcol(u))]...)
     end
@@ -53,7 +54,7 @@ function advect_1d_op(dtype, shape, stencil, v_f, Δx_f, Δt)
                     ddu[i - lpad] = stencil(
                         uu[(i - lpad):(i + rpad)],
                         (v_f(i - lpad, j, t), v_f(i - lpad + 1, j, t)),
-                        Δt, Δx_f(i - lpad, j, t)
+                        Δt, Δx_f(i - lpad, j, t), p=p
                     )
                 end
             end
@@ -62,7 +63,7 @@ function advect_1d_op(dtype, shape, stencil, v_f, Δx_f, Δt)
     end
     indata = zeros(dtype, shape[1] + lpad + rpad, shape[2:end]...)
     outdata = zeros(dtype, shape[1], shape[2:end]...)
-    FunctionOperator(f, indata, outdata, batch = true, p = NullParameters())
+    FunctionOperator(f, indata, outdata, batch = true, p = p)
 end
 
 """
@@ -99,17 +100,18 @@ following arguments to create the operator:
             where `i` is a grid index, `j` is the column index
             (where `max(i) == shape(2)`)`, and `t` is time.
     * `Δt`: The time step size, which is assumed to be fixed.
+    * `p`: Optional parameters to pass to the stencil function.
 
 The reason for the two-step process is that `Δv_f` and `Δx_f`` may be dependent on 
 `idx_f`, so we need to return `idx_f` before we create the operator.
 """
-function tensor_advection_op(dtype, shape, index, stencil; bc_opf = zerograd_bc_op)
+function tensor_advection_op(dtype, shape, index, stencil; bc_opf = zerograd_bc_op, p=NullParameters(), kwargs...)
     shape = [shape...]
-    order, idx_f = orderby_op(dtype, shape, index)
+    order, idx_f = orderby_op(dtype, shape, index, p=p)
     bc = bc_opf(shape[index], stencil)
     ncols = *(shape...) ÷ shape[index]
     return (v_f, Δx_f, Δt) -> begin
-        adv_op = advect_1d_op(dtype, (shape[index], ncols), stencil, v_f, Δx_f, Δt)
+        adv_op = advect_1d_op(dtype, (shape[index], ncols), stencil, v_f, Δx_f, Δt; p=p)
 
         # How this operator works:
         # Starting from the right side and moving toward the left, first we 
@@ -199,9 +201,10 @@ Create a 1D advection SciMLOperator for the given variable name `varname`.
 `vardict` should be a dictionary with keys that are strings with the 
 possible `varname`s and values that are the corresponding variables in the
 ODESystem that should be used to get the wind velocity values.
+`p` is an optional parameter set that can be passed to the stencil function.
 """
 function simulator_advection_1d(
-        sim::EarthSciMLBase.Simulator, op, varname)
+        sim::EarthSciMLBase.Simulator, op, varname; p=NullParameters())
     pvaridx = findfirst( # Get the index of the variable in the domaininfo
         isequal(varname), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
 
@@ -209,7 +212,8 @@ function simulator_advection_1d(
         EarthSciMLBase.utype(sim.domaininfo),
         size(sim.u),
         1 + pvaridx,
-        op.stencil
+        op.stencil;
+        p=p,
     )
 
     data_f = sim.obs_fs[sim.obs_fs_idx[op.vardict[varname]]]
@@ -227,6 +231,7 @@ Create an `EarthSciMLBase.Operator` that performs advection. `Δt` is the time s
 and `alg` is the ODE solver algorithm to use. 
 Advection is performed using the given `stencil` operator 
 (e.g. `l94_stencil` or `ppm_stencil`). 
+`p` is an optional parameter set to be used by the stencil operator.
 Any additional keyword arguments are passed
 to the ODEProblem and ODEIntegrator constructors.
 """
@@ -238,10 +243,11 @@ mutable struct AdvectionOperator <: EarthSciMLBase.Operator
     prob::Any
     integrator::Any
     algorithm::Any
+    p::Any
     kwargs::Any
 
-    function AdvectionOperator(Δt, stencil, alg; kwargs...)
-        new(nothing, Δt, stencil, nothing, nothing, nothing, alg, kwargs)
+    function AdvectionOperator(Δt, stencil, alg; p=NullParameters(), kwargs...)
+        new(nothing, Δt, stencil, nothing, nothing, nothing, alg, p, kwargs)
     end
 end
 
@@ -251,7 +257,7 @@ function EarthSciMLBase.initialize!(op::AdvectionOperator, s::Simulator)
     pvars = EarthSciMLBase.pvars(s.domaininfo)
     pvarstrs = [String(Symbol(pv)) for pv in pvars]
     # Create advection operators in each of the three dimensions and add them together.
-    op.op = +([simulator_advection_1d(s, op, pv) for pv in pvarstrs]...)
+    op.op = +([simulator_advection_1d(s, op, pv, p=op.p) for pv in pvarstrs]...)
     op.op = cache_operator(op.op, s.u[:])
 
     start, finish = EarthSciMLBase.time_range(s.domaininfo)

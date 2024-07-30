@@ -2,6 +2,7 @@ using EnvironmentalTransport: advect_1d_op, tensor_advection_op
 using EnvironmentalTransport
 using Test
 using LinearAlgebra
+using SciMLOperators
 using SciMLBase: NullParameters
 
 c = [0.0, 1, 2, 3, 4, 5]
@@ -91,4 +92,20 @@ end
     c1_want[2, 2, 3, 4] = -2
     c1_want[2, 2, 3, 5] = 2
     @test c1 ≈ c1_want[:]
+end
+
+function mul_stencil(ϕ, U, Δt, Δz; p = 0.0)
+    p
+end
+EnvironmentalTransport.stencil_size(s::typeof(mul_stencil)) = (0, 0)
+
+@testset "parameters" begin
+    op_f, _ = tensor_advection_op(Float64, (nv, nx, ny, nz), 2, mul_stencil; p = 0.0)
+    tensor_mul = op_f((i, j, t) -> 1, (i, j, t) -> Δz, Δt)
+    o = tensor_mul(c[:], 2.0, 0.0)
+    @test all(o .== 2.0)
+    o .= 0.0
+    tm = cache_operator(tensor_mul, o)
+    tm(o, c[:], 3.0, 0.0)
+    @test all(o .== 3.0)
 end
