@@ -16,6 +16,8 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Advection" => "advection.md",
+        "API" => "api.md",
     ],
 )
 
