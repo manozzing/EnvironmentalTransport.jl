@@ -8,9 +8,6 @@ using Distributions, LinearAlgebra
 using Dates
 
 @parameters lon=0.0 lat=0.0 lev=1.0 t
-lat = GlobalScope(lat)
-lon = GlobalScope(lon)
-lev = GlobalScope(lev)
 starttime = datetime2unix(DateTime(2022, 5, 1))
 endtime = datetime2unix(DateTime(2022, 5, 1, 1, 0, 5))
 
@@ -38,13 +35,14 @@ emis = emissions(t, deg2rad(-122.6), deg2rad(45.5), 0.1)
 
 csys = couple(emis, domain, geosfp)
 
-sim = Simulator(csys, [deg2rad(4), deg2rad(4), 1], Tsit5())
+sim = Simulator(csys, [deg2rad(4), deg2rad(4), 1])
+st = SimulatorStrangThreads(Tsit5(), SSPRK22(), 1.0)
 
-run!(sim)
+sol = run!(sim, st)
 
-@test 420 < norm(sim.u) < 470
+@test 310 < norm(sol.u[end]) < 330
 
-op = AdvectionOperator(100.0, l94_stencil, SSPRK22())
+op = AdvectionOperator(100.0, l94_stencil)
 
 @test isnothing(op.vardict) # Before coupling, there shouldn't be anything here.
 
@@ -52,16 +50,16 @@ csys = couple(csys, op)
 
 @test !isnothing(op.vardict) # after coupling, there should be something here.
 
-run!(sim)
+sol = run!(sim, st)
 
 # With advection, the norm should be lower because the pollution is more spread out.
-@test 310 < norm(sim.u) < 350
+@test 310 < norm(sol.u[end]) < 350
 
 @testset "get_vf lon" begin
     pvaridx = findfirst(
         isequal("lon"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
     _, idx_f = orderby_op(
-        EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
+        EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
 
     @test get_vf(sim, "lon", sim.obs_fs[sim.obs_fs_idx[op.vardict["lon"]]], idx_f)(
         2, 3, starttime) ≈ -0.8448177656085027
@@ -71,7 +69,7 @@ end
     pvaridx = findfirst(
         isequal("lat"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
     _, idx_f = orderby_op(
-        EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
+        EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
 
     @test get_vf(sim, "lat", sim.obs_fs[sim.obs_fs_idx[op.vardict["lat"]]], idx_f)(
         2, 3, starttime) ≈ 3.8061048027295152
@@ -81,7 +79,7 @@ end
     pvaridx = findfirst(
         isequal("lev"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
     _, idx_f = orderby_op(
-        EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
+        EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
 
     @test get_vf(sim, "lev", sim.obs_fs[sim.obs_fs_idx[op.vardict["lev"]]], idx_f)(
         2, 3, starttime) ≈ -0.006329571396093452

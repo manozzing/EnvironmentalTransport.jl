@@ -70,8 +70,7 @@ csys = couple(emis, domain, geosfp, output)
 ## Advection Operator
 
 Next, we create an [`AdvectionOperator`](@ref) to perform advection. 
-We need to specify a time step (600 s in this case), as stencil algorithm to do the advection (current options are [`l94_stencil`](@ref) and [`ppm_stencil`](@ref)), and a time integration scheme (`SSPRK22` in this case).
-Refer [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/) for the available time integrator choices.
+We need to specify a time step (600 s in this case), as stencil algorithm to do the advection (current options are [`l94_stencil`](@ref) and [`ppm_stencil`](@ref)).
 
 Then, we couple the advection operator to the rest of the system.
 
@@ -80,18 +79,22 @@ Then, we couple the advection operator to the rest of the system.
     in the coupled system for this to work correctly.
 
 ```@example adv
-adv = AdvectionOperator(600.0, l94_stencil, SSPRK22())
+adv = AdvectionOperator(600.0, l94_stencil)
 
 csys = couple(csys, adv)
 ```
 Now, we initialize a [`Simulator`](https://base.earthsci.dev/dev/simulator/) to run our demonstration. 
-We specify a horizontal resolution of 4 degrees and a vertical resolution of 1 level, and use the `Tsit5` time integrator for our emissions system of equations.
+We specify a horizontal resolution of 4 degrees and a vertical resolution of 1 level, and use the `Tsit5` time integrator for our emissions system of equations, and a time integration scheme for our advection operator (`SSPRK22` in this case).
+Refer [here](https://docs.sciml.ai/DiffEqDocs/stable/solvers/ode_solve/) for the available time integrator choices.
+We also choose a operator splitting interval of 600 seconds.
 Then, we run the simulation.
 
 ```@example adv
-sim = Simulator(csys, [deg2rad(4), deg2rad(4), 1], Tsit5())
+sim = Simulator(csys, [deg2rad(4), deg2rad(4), 1])
+st = SimulatorStrangThreads(Tsit5(), SSPRK22(), 600.0)
 
-@time run!(sim)
+run!(sim, st, save_on=false, save_start=false, save_end=false, 
+    initialize_save=false, progress=true)
 ```
 
 ## Visualization

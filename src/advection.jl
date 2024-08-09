@@ -144,7 +144,7 @@ function get_vf(sim, varname::AbstractString, data_f, idx_f)
 
     if varname ∈ ("lon", "x")
         return (i, j, t) -> begin
-            idx = idx_f(min(i, size(sim.u, pvaridx + 1)), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
+            idx = idx_f(min(i, size(sim)[pvaridx + 1]), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
             data_f(t,
                 sim.grid[1][idx[2]] - sim.Δs[1] / 2, # Staggered grid 
                 sim.grid[2][idx[3]],
@@ -152,7 +152,7 @@ function get_vf(sim, varname::AbstractString, data_f, idx_f)
         end
     elseif varname ∈ ("lat", "y")
         return (i, j, t) -> begin
-            idx = idx_f(min(i, size(sim.u, pvaridx + 1)), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
+            idx = idx_f(min(i, size(sim)[pvaridx + 1]), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
             data_f(t,
                 sim.grid[1][idx[2]],
                 sim.grid[2][idx[3]] - sim.Δs[2] / 2, # Staggered grid 
@@ -160,7 +160,7 @@ function get_vf(sim, varname::AbstractString, data_f, idx_f)
         end
     elseif varname == "lev"
         return (i, j, t) -> begin
-            idx = idx_f(min(i, size(sim.u, pvaridx + 1)), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
+            idx = idx_f(min(i, size(sim)[pvaridx + 1]), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
             data_f(t,
                 sim.grid[1][idx[2]],
                 sim.grid[2][idx[3]],
@@ -183,7 +183,7 @@ function get_Δ(sim::EarthSciMLBase.Simulator, varname::AbstractString)
     tff = sim.tf_fs[pvaridx]
 
     _, idx_f = orderby_op(
-        EarthSciMLBase.utype(sim.domaininfo), [size(sim.u)...], 1 + pvaridx)
+        EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
 
     return (i, j, t) -> begin
         idx = idx_f(i, j)
@@ -210,7 +210,7 @@ function simulator_advection_1d(
 
     op_f, idx_f = tensor_advection_op(
         EarthSciMLBase.utype(sim.domaininfo),
-        size(sim.u),
+        size(sim),
         1 + pvaridx,
         op.stencil;
         p=p,
@@ -227,54 +227,30 @@ end
 """
 $(SIGNATURES)
 
-Create an `EarthSciMLBase.Operator` that performs advection. `Δt` is the time step size
-and `alg` is the ODE solver algorithm to use. 
+Create an `EarthSciMLBase.Operator` that performs advection.
 Advection is performed using the given `stencil` operator 
 (e.g. `l94_stencil` or `ppm_stencil`). 
 `p` is an optional parameter set to be used by the stencil operator.
-Any additional keyword arguments are passed
-to the ODEProblem and ODEIntegrator constructors.
 """
 mutable struct AdvectionOperator <: EarthSciMLBase.Operator
-    op::Any
     Δt::Any
     stencil::Any
     vardict::Any
-    prob::Any
-    integrator::Any
-    algorithm::Any
-    p::Any
-    kwargs::Any
 
-    function AdvectionOperator(Δt, stencil, alg; p=NullParameters(), kwargs...)
-        new(nothing, Δt, stencil, nothing, nothing, nothing, alg, p, kwargs)
+    function AdvectionOperator(Δt, stencil)
+        new(Δt, stencil, nothing)
     end
 end
 
-EarthSciMLBase.timestep(op::AdvectionOperator) = op.Δt
-
-function EarthSciMLBase.initialize!(op::AdvectionOperator, s::Simulator)
+function EarthSciMLBase.get_scimlop(op::AdvectionOperator, s::Simulator)
     pvars = EarthSciMLBase.pvars(s.domaininfo)
     pvarstrs = [String(Symbol(pv)) for pv in pvars]
     # Create advection operators in each of the three dimensions and add them together.
-    op.op = +([simulator_advection_1d(s, op, pv, p=op.p) for pv in pvarstrs]...)
-    op.op = cache_operator(op.op, s.u[:])
-
-    start, finish = EarthSciMLBase.time_range(s.domaininfo)
-    op.prob = ODEProblem(op.op, s.u[:], (start, finish); dt = op.Δt, op.kwargs...)
-    op.integrator = init(op.prob, op.algorithm, save_on = false,
-        save_start = false, save_end = false, initialize_save = false; op.kwargs...)
-    nothing
+    op = +([simulator_advection_1d(s, op, pv, p=s.p) for pv in pvarstrs]...)
+    u = zeros(EarthSciMLBase.utype(s.domaininfo), size(s)...)
+    cache_operator(op, u[:])
 end
 
-function EarthSciMLBase.run!(op::AdvectionOperator, s::Simulator, time, step_length)
-    @assert step_length≈op.Δt "step_length $(step_length) must be equal to the advection operator timestep $(op.Δt)."
-    reinit!(op.integrator, s.u[:], t0 = time, tf = time + step_length,
-        erase_sol = false, reset_dt = true)
-    solve!(op.integrator)
-    @assert length(op.integrator.sol.u) == 0
-    s.u[:] .= op.integrator.u
-end
 
 """
 $(SIGNATURES)
