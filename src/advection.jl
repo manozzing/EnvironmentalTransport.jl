@@ -204,7 +204,7 @@ ODESystem that should be used to get the wind velocity values.
 `p` is an optional parameter set that can be passed to the stencil function.
 """
 function simulator_advection_1d(
-        sim::EarthSciMLBase.Simulator, op, varname; p=NullParameters())
+        sim::EarthSciMLBase.Simulator, op::AdvectionOperator, varname; p=NullParameters())
     pvaridx = findfirst( # Get the index of the variable in the domaininfo
         isequal(varname), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
 
