@@ -13,6 +13,7 @@ makedocs(;
         canonical="https://EarthSciML.github.io/EnvironmentalTransport.jl",
         edit_link="main",
         assets=String[],
+        repolink="https://github.com/EarthSciML/EnvironmentalTransport.jl"
     ),
     pages=[
         "Home" => "index.md",
