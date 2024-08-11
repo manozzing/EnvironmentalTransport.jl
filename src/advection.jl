@@ -197,6 +197,24 @@ end
 """
 $(SIGNATURES)
 
+Create an `EarthSciMLBase.Operator` that performs advection.
+Advection is performed using the given `stencil` operator 
+(e.g. `l94_stencil` or `ppm_stencil`). 
+`p` is an optional parameter set to be used by the stencil operator.
+"""
+mutable struct AdvectionOperator <: EarthSciMLBase.Operator
+    Δt::Any
+    stencil::Any
+    vardict::Any
+
+    function AdvectionOperator(Δt, stencil)
+        new(Δt, stencil, nothing)
+    end
+end
+
+"""
+$(SIGNATURES)
+
 Create a 1D advection SciMLOperator for the given variable name `varname`.
 `vardict` should be a dictionary with keys that are strings with the 
 possible `varname`s and values that are the corresponding variables in the
@@ -224,23 +242,6 @@ function simulator_advection_1d(
     )
 end
 
-"""
-$(SIGNATURES)
-
-Create an `EarthSciMLBase.Operator` that performs advection.
-Advection is performed using the given `stencil` operator 
-(e.g. `l94_stencil` or `ppm_stencil`). 
-`p` is an optional parameter set to be used by the stencil operator.
-"""
-mutable struct AdvectionOperator <: EarthSciMLBase.Operator
-    Δt::Any
-    stencil::Any
-    vardict::Any
-
-    function AdvectionOperator(Δt, stencil)
-        new(Δt, stencil, nothing)
-    end
-end
 
 function EarthSciMLBase.get_scimlop(op::AdvectionOperator, s::Simulator)
     pvars = EarthSciMLBase.pvars(s.domaininfo)
@@ -263,7 +264,7 @@ Currently the only valid source of wind data is `EarthSciData.GEOSFP`.
 function EarthSciMLBase.couple(c::CoupledSystem, op::AdvectionOperator)::CoupledSystem
     found = 0
     for sys in c.systems
-        if EarthSciMLBase.systemhash(sys) == :EarthSciData₊GEOSFP
+        if EarthSciMLBase.get_coupletype(sys) == EarthSciData.GEOSFPCoupler
             found += 1
             op.vardict = Dict(
                 "lon" => sys.A3dyn₊U,
