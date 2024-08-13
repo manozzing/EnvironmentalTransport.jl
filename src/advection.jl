@@ -47,7 +47,7 @@ function advect_1d_op(dtype, shape, stencil, v_f, Δx_f, Δt; p = NullParameters
     end
     function f(du::AbstractMatrix, u::AbstractMatrix, p, t) # In-place, matrix
         begin
-            for j in 1:size(u, 2)
+            Threads.@threads for j in 1:size(u, 2)
                 ddu = view(du, :, j)
                 uu = view(u, :, j)
                 for i in (firstindex(uu) + lpad):(lastindex(uu) - rpad)
