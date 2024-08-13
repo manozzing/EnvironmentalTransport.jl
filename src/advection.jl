@@ -24,37 +24,37 @@ Arguments:
     * `Δt`: The time step size, which is assumed to be fixed.
     * `p`: Optional parameters to pass to the stencil function.
 """
-function advect_1d_op(dtype, shape, stencil, v_f, Δx_f, Δt; p=NullParameters())
+function advect_1d_op(dtype, shape, stencil, v_f, Δx_f, Δt; p = NullParameters())
     lpad, rpad = stencil_size(stencil)
     function f(u::AbstractVector, p, t) # Out-of-place, vector
         [stencil(u[(i - lpad):(i + rpad)],
-             (v_f(i - lpad, t), v_f(i - lpad + 1, t)), Δt, Δx_f(i - lpad, t), p=p)
+             (v_f(i - lpad, t), v_f(i - lpad + 1, t)), Δt, Δx_f(i - lpad, t), p = p)
          for i in (firstindex(u) + lpad):(lastindex(u) - rpad)]
     end
     function f(du::AbstractVector, u::AbstractVector, p, t) # In-place, vector
         for i in (firstindex(u) + lpad):(lastindex(u) - rpad)
             du[i - lpad] = stencil(
                 u[(i - lpad):(i + rpad)], (v_f(i - lpad, t), v_f(i - lpad + 1, t)), Δt, Δx_f(
-                    i - lpad, t), p=p)
+                    i - lpad, t), p = p)
         end
         du
     end
     function f(u::AbstractMatrix, p, t) # Out-of-place, matrix
         hcat([[stencil(col[(i - lpad):(i + rpad)],
-                   (v_f(i - lpad, j, t), v_f(i - lpad + 1, j, t)), Δt, Δx_f(i - lpad, j, t), p=p)
+                   (v_f(i - lpad, j, t), v_f(i - lpad + 1, j, t)), Δt, Δx_f(i - lpad, j, t), p = p)
                for i in (firstindex(col) + lpad):(lastindex(col) - rpad)]
               for (j, col) in enumerate(eachcol(u))]...)
     end
     function f(du::AbstractMatrix, u::AbstractMatrix, p, t) # In-place, matrix
-        @views begin
+        begin
             for j in 1:size(u, 2)
-                ddu = du[:, j]
-                uu = u[:, j]
+                ddu = view(du, :, j)
+                uu = view(u, :, j)
                 for i in (firstindex(uu) + lpad):(lastindex(uu) - rpad)
-                    ddu[i - lpad] = stencil(
-                        uu[(i - lpad):(i + rpad)],
+                    uuslice = view(uu, (i - lpad):(i + rpad))
+                    ddu[i - lpad] = stencil(uuslice,
                         (v_f(i - lpad, j, t), v_f(i - lpad + 1, j, t)),
-                        Δt, Δx_f(i - lpad, j, t), p=p
+                        Δt, Δx_f(i - lpad, j, t), p = p
                     )
                 end
             end
@@ -105,13 +105,14 @@ following arguments to create the operator:
 The reason for the two-step process is that `Δv_f` and `Δx_f`` may be dependent on 
 `idx_f`, so we need to return `idx_f` before we create the operator.
 """
-function tensor_advection_op(dtype, shape, index, stencil; bc_opf = zerograd_bc_op, p=NullParameters(), kwargs...)
+function tensor_advection_op(dtype, shape, index, stencil; bc_opf = zerograd_bc_op,
+        p = NullParameters(), kwargs...)
     shape = [shape...]
-    order, idx_f = orderby_op(dtype, shape, index, p=p)
+    order, idx_f = orderby_op(dtype, shape, index, p = p)
     bc = bc_opf(shape[index], stencil)
     ncols = *(shape...) ÷ shape[index]
     return (v_f, Δx_f, Δt) -> begin
-        adv_op = advect_1d_op(dtype, (shape[index], ncols), stencil, v_f, Δx_f, Δt; p=p)
+        adv_op = advect_1d_op(dtype, (shape[index], ncols), stencil, v_f, Δx_f, Δt; p = p)
 
         # How this operator works:
         # Starting from the right side and moving toward the left, first we 
@@ -127,6 +128,40 @@ function tensor_advection_op(dtype, shape, index, stencil; bc_opf = zerograd_bc_
     idx_f
 end
 
+"Get a value from the x-direction velocity field."
+function vf_x(args1, args2)
+    i, j, t = args1
+    data_f, d, grid1, grid2, grid3, idx_f, Δ = args2
+    idx = idx_f(min(i, d), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
+    x1 = grid1[idx[2]] - Δ / 2 # Staggered grid
+    x2 = grid2[idx[3]]
+    x3 = grid3[idx[4]]
+    data_f(t, x1, x2, x3)
+end
+
+"Get a value from the y-direction velocity field."
+function vf_y(args1, args2)
+    i, j, t = args1
+    data_f, d, grid1, grid2, grid3, idx_f, Δ = args2
+    idx = idx_f(min(i, d), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
+    x1 = grid1[idx[2]]
+    x2 = grid2[idx[3]] - Δ / 2 # Staggered grid
+    x3 = grid3[idx[4]]
+    data_f(t, x1, x2, x3)
+end
+
+"Get a value from the z-direction velocity field."
+function vf_z(args1, args2)
+    i, j, t = args1
+    data_f, d, grid1, grid2, grid3, idx_f, Δ = args2
+    idx = idx_f(min(i, d), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
+    x1 = grid1[idx[2]]
+    x2 = grid2[idx[3]]
+    x3 = idx[4] > 1 ? grid3[idx[4]] - Δ / 2 : grid3[idx[4]]
+    data_f(t, x1, x2, x3) # Staggered grid 
+end
+tuplefunc(vf) = (i, j, t) -> vf((i, j, t))
+
 """
 $(SIGNATURES)
 
@@ -141,35 +176,34 @@ the wind speed in the direction indicated by `varname`.
 function get_vf(sim, varname::AbstractString, data_f, idx_f)
     pvaridx = findfirst(
         isequal(varname), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
+    d = size(sim)[pvaridx + 1]
 
     if varname ∈ ("lon", "x")
-        return (i, j, t) -> begin
-            idx = idx_f(min(i, size(sim)[pvaridx + 1]), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
-            data_f(t,
-                sim.grid[1][idx[2]] - sim.Δs[1] / 2, # Staggered grid 
-                sim.grid[2][idx[3]],
-                sim.grid[3][idx[4]])
-        end
+        vf = Base.Fix2(
+            vf_x, (data_f, d, sim.grid[1], sim.grid[2], sim.grid[3], idx_f, sim.Δs[1]))
+        return tuplefunc(vf)
     elseif varname ∈ ("lat", "y")
-        return (i, j, t) -> begin
-            idx = idx_f(min(i, size(sim)[pvaridx + 1]), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
-            data_f(t,
-                sim.grid[1][idx[2]],
-                sim.grid[2][idx[3]] - sim.Δs[2] / 2, # Staggered grid 
-                sim.grid[3][idx[4]])
-        end
+        vf = Base.Fix2(
+            vf_y, (data_f, d, sim.grid[1], sim.grid[2], sim.grid[3], idx_f, sim.Δs[2]))
+        return tuplefunc(vf)
     elseif varname == "lev"
-        return (i, j, t) -> begin
-            idx = idx_f(min(i, size(sim)[pvaridx + 1]), j) # Avoid out-of-bounds because CartesianIndex isn't on staggered grid.
-            data_f(t,
-                sim.grid[1][idx[2]],
-                sim.grid[2][idx[3]],
-                idx[4] > 1 ? sim.grid[3][idx[4]] - sim.Δs[3] / 2 : sim.grid[3][idx[4]] # Staggered grid 
-            )
-        end
+        vf = Base.Fix2(
+            vf_z, (data_f, d, sim.grid[1], sim.grid[2], sim.grid[3], idx_f, sim.Δs[3]))
+        return tuplefunc(vf)
     else
         error("Invalid variable name $(varname).")
     end
+end
+
+"function to get grid deltas."
+function Δf(args1, args2)
+    i, j, t = args1
+    idx_f, tff, Δ, grid1, grid2, grid3 = args2
+    idx = idx_f(i, j)
+    c1 = grid1[idx[2]]
+    c2 = grid2[idx[3]]
+    c3 = grid3[idx[4]]
+    Δ / tff(t, c1, c2, c3)
 end
 
 """
@@ -185,13 +219,7 @@ function get_Δ(sim::EarthSciMLBase.Simulator, varname::AbstractString)
     _, idx_f = orderby_op(
         EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
 
-    return (i, j, t) -> begin
-        idx = idx_f(i, j)
-        sim.Δs[pvaridx] / tff(t,
-            sim.grid[1][idx[2]],
-            sim.grid[2][idx[3]],
-            sim.grid[3][idx[4]])
-    end
+    tuplefunc(Base.Fix2(Δf, (idx_f, tff, sim.Δs[pvaridx], sim.grid[1], sim.grid[2], sim.grid[3])))
 end
 
 """
@@ -222,7 +250,7 @@ ODESystem that should be used to get the wind velocity values.
 `p` is an optional parameter set that can be passed to the stencil function.
 """
 function simulator_advection_1d(
-        sim::EarthSciMLBase.Simulator, op::AdvectionOperator, varname; p=NullParameters())
+        sim::EarthSciMLBase.Simulator, op::AdvectionOperator, varname; p = NullParameters())
     pvaridx = findfirst( # Get the index of the variable in the domaininfo
         isequal(varname), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
 
@@ -231,7 +259,7 @@ function simulator_advection_1d(
         size(sim),
         1 + pvaridx,
         op.stencil;
-        p=p,
+        p = p
     )
 
     data_f = sim.obs_fs[sim.obs_fs_idx[op.vardict[varname]]]
@@ -242,16 +270,14 @@ function simulator_advection_1d(
     )
 end
 
-
 function EarthSciMLBase.get_scimlop(op::AdvectionOperator, s::Simulator)
     pvars = EarthSciMLBase.pvars(s.domaininfo)
     pvarstrs = [String(Symbol(pv)) for pv in pvars]
     # Create advection operators in each of the three dimensions and add them together.
-    op = +([simulator_advection_1d(s, op, pv, p=s.p) for pv in pvarstrs]...)
+    op = +([simulator_advection_1d(s, op, pv, p = s.p) for pv in pvarstrs]...)
     u = zeros(EarthSciMLBase.utype(s.domaininfo), size(s)...)
     cache_operator(op, u[:])
 end
-
 
 """
 $(SIGNATURES)

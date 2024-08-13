@@ -36,8 +36,8 @@ function orderby_op(dtype, shape::AbstractVector, index::Int; p=NullParameters()
     idx_all = reshape(1:vec_length, shape...)
     c_ii = CartesianIndices(idx_all)
     idx_reshaped = fwd(idx_all, nothing, nothing)
-    idx_f(col) = c_ii[idx_reshaped[:, col]] # function to transform the indexes
-    idx_f(row, col) = c_ii[idx_reshaped[:, col]][row] # function to transform the indexes
+    idx_f(col) = view(c_ii, view(idx_reshaped, :, col)) # function to transform the indexes
+    idx_f(row, col) = view(c_ii, view(idx_reshaped, :, col))[row] # function to transform the indexes
     x = zeros(dtype, shape[1], Int(vec_length / shape[1]))
     FunctionOperator(fwd, x, x; op_adjoint = rev, op_inverse = rev,
         op_adjoint_inverse = fwd, islinear = true, p = p),
