@@ -19,6 +19,7 @@ makedocs(;
         "Home" => "index.md",
         "Advection" => "advection.md",
         "API" => "api.md",
+        "🔗 Benchmarks" => "benchmarks.md",
     ],
 )
 
