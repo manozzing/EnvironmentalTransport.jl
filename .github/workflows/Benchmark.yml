@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   benchmark:
-    name: Run julia benchmark example
+    name: Run benchmark
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

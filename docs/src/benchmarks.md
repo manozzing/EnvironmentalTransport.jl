@@ -1,6 +1,4 @@
----
-title: "Redirecting..."
----
+# Redirecting...
 
 ```@raw html
 <html>
