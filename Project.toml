@@ -15,10 +15,11 @@ SciMLOperators = "c0aeaf25-5076-4817-a8d5-81caf7dfa961"
 
 [compat]
 DocStringExtensions = "0.9"
-DomainSets = "0.5, 0.6"
-EarthSciData = "0.8"
-EarthSciMLBase = "0.15"
-ModelingToolkit = "8"
+DomainSets = "0.7"
+DynamicQuantities = "0.13"
+EarthSciData = "0.9"
+EarthSciMLBase = "0.16"
+ModelingToolkit = "9"
 OrdinaryDiffEq = "6"
 SciMLBase = "2"
 SciMLOperators = "0.3"
@@ -27,9 +28,10 @@ julia = "1.8"
 [extras]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+DynamicQuantities = "06fc5a27-2a28-4c7c-a15d-362465fb6821"
 DomainSets = "5b8099bc-c8ec-5219-889f-1d9e522a28bf"
 SafeTestsets = "1bc83da4-3b8d-516f-aca4-4fe02f6d838f"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Dates", "Distributions", "DomainSets", "SafeTestsets", "Test"]
+test = ["Dates", "Distributions", "DomainSets", "DynamicQuantities", "SafeTestsets", "Test"]

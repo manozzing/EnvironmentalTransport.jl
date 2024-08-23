@@ -11,7 +11,7 @@ function setup_advection_simulator(lonres, latres, stencil)
     @parameters lon=0.0 lat=0.0 lev=1.0 t
     endtime = datetime2unix(DateTime(2022, 5, 1, 1, 0, 5))
 
-    geosfp = GEOSFP("4x5", t; dtype = Float64,
+    geosfp, updater = GEOSFP("4x5"; dtype = Float64,
         coord_defaults = Dict(:lon => 0.0, :lat => 0.0, :lev => 1.0))
 
     domain = DomainInfo(
@@ -31,7 +31,7 @@ function setup_advection_simulator(lonres, latres, stencil)
 
     emis = emissions(t)
 
-    csys = couple(emis, domain, geosfp)
+    csys = couple(emis, domain, geosfp, updater)
     op = AdvectionOperator(100.0, stencil)
     csys = couple(csys, op)
     sim = Simulator(csys, [deg2rad(lonres), deg2rad(latres), 1])
@@ -56,6 +56,9 @@ for stencil ∈ [l94_stencil, ppm_stencil]
         end
     end
 end
+
+#op, u = setup_advection_simulator(0.1, 0.1, l94_stencil)
+#@profview op(u[:], u[:], [0.0], starttime)
 
 tune!(suite)
 results = run(suite, verbose = true)

@@ -22,22 +22,20 @@ function orderby_op(dtype, shape::AbstractVector, index::Int; p=NullParameters()
     vec_length = *(shape...)
     ii = 1:length(shape)
     iiremainder = setdiff(ii, index)
-    fwd_idx = tuple(index, iiremainder...)
-    function fwd(u, p, t)
-        reshape(permutedims(reshape(u, shape...), fwd_idx), shape[index], :)
-    end
-    fwd(du, u, p, t) = du[:] .= fwd(u, p, t)[:]
     newshape = tuple(shape[[index, iiremainder...]]...)
+    # Function to reorder dimensions
+    fwd_idx = tuple(index, iiremainder...)
+    fwd(u, p, t) = reshape(permutedims(reshape(u, shape...), fwd_idx), shape[index], :)
+    fwd(du, u, p, t) = permutedims!(reshape(du, newshape...), reshape(u, shape...), fwd_idx)
+    # Function to put dimensions back in original order
     rev_idx = tuple(insert!(collect(2:length(shape)), index, 1)...)
-    function rev(u, p, t)
-        permutedims(reshape(u, newshape...), rev_idx)[:]
-    end
-    rev(du, u, p, t) = du[:] .= rev(u, p, t)[:]
+    rev(u, p, t) = permutedims(reshape(u, newshape...), rev_idx)[:]
+    rev(du, u, p, t) = permutedims!(reshape(du, shape...), reshape(u, newshape...), rev_idx)
     idx_all = reshape(1:vec_length, shape...)
     c_ii = CartesianIndices(idx_all)
     idx_reshaped = fwd(idx_all, nothing, nothing)
-    idx_f(col) = view(c_ii, view(idx_reshaped, :, col)) # function to transform the indexes
-    idx_f(row, col) = view(c_ii, view(idx_reshaped, :, col))[row] # function to transform the indexes
+    idx_f(col) = @inbounds view(c_ii, view(idx_reshaped, :, col)) # function to transform the indexes
+    idx_f(row, col) = @inbounds view(c_ii, view(idx_reshaped, :, col))[row] # function to transform the indexes
     x = zeros(dtype, shape[1], Int(vec_length / shape[1]))
     FunctionOperator(fwd, x, x; op_adjoint = rev, op_inverse = rev,
         op_adjoint_inverse = fwd, islinear = true, p = p),

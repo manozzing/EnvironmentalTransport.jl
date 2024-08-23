@@ -109,7 +109,7 @@ function tensor_advection_op(dtype, shape, index, stencil; bc_opf = zerograd_bc_
         p = NullParameters(), kwargs...)
     shape = [shape...]
     order, idx_f = orderby_op(dtype, shape, index, p = p)
-    bc = bc_opf(shape[index], stencil)
+    bc = bc_opf(zeros(dtype, shape[index]), stencil, p = p)
     ncols = *(shape...) ÷ shape[index]
     return (v_f, Δx_f, Δt) -> begin
         adv_op = advect_1d_op(dtype, (shape[index], ncols), stencil, v_f, Δx_f, Δt; p = p)
@@ -219,7 +219,8 @@ function get_Δ(sim::EarthSciMLBase.Simulator, varname::AbstractString)
     _, idx_f = orderby_op(
         EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
 
-    tuplefunc(Base.Fix2(Δf, (idx_f, tff, sim.Δs[pvaridx], sim.grid[1], sim.grid[2], sim.grid[3])))
+    tuplefunc(Base.Fix2(
+        Δf, (idx_f, tff, sim.Δs[pvaridx], sim.grid[1], sim.grid[2], sim.grid[3])))
 end
 
 """

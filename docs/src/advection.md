@@ -11,6 +11,8 @@ To demonstrate how it works, let's first set up our environment:
 using EnvironmentalTransport
 using EarthSciMLBase, EarthSciData
 using ModelingToolkit, DomainSets, DifferentialEquations
+using ModelingToolkit: t, D
+using DynamicQuantities
 using Distributions, LinearAlgebra
 using Dates
 using NCDatasets, Plots
@@ -26,17 +28,22 @@ We have some emissions centered around Portland, starting at the beginning of th
 starttime = datetime2unix(DateTime(2022, 5, 1, 0, 0))
 endtime = datetime2unix(DateTime(2022, 5, 15, 0, 0))
 
-@parameters lon=0.0 lat=0.0 lev=1.0 t
+@parameters(
+    lon=0.0, [unit=u"rad"],
+    lat=0.0, [unit=u"rad"],
+    lev=1.0,
+)
 
-function emissions(t, μ_lon, μ_lat, σ)
-    @variables c(t) = 0.0
-    dist =MvNormal([starttime, μ_lon, μ_lat, 1], Diagonal(map(abs2, [3600.0, σ, σ, 1])))
-    D = Differential(t)
-    ODESystem([D(c) ~ pdf(dist, [t, lon, lat, lev]) * 50],
+function emissions(μ_lon, μ_lat, σ)
+    @variables c(t) = 0.0 [unit=u"kg"]
+    @constants v_emis = 50.0 [unit=u"kg/s"]
+    @constants t_unit = 1.0 [unit=u"s"] # Needed so that arguments to `pdf` are unitless.
+    dist = MvNormal([starttime, μ_lon, μ_lat, 1], Diagonal(map(abs2, [3600.0, σ, σ, 1])))
+    ODESystem([D(c) ~ pdf(dist, [t/t_unit, lon, lat, lev]) * v_emis],
         t, name = :Test₊emissions)
 end
 
-emis = emissions(t, deg2rad(-122.6), deg2rad(45.5), 0.1)
+emis = emissions(deg2rad(-122.6), deg2rad(45.5), 0.1)
 ```
 
 ## Coupled System
@@ -49,7 +56,7 @@ We also set up an [outputter](https://data.earthsci.dev/stable/api/#EarthSciData
 single system.
 
 ```@example adv
-geosfp = GEOSFP("4x5", t; dtype = Float64,
+geosfp, geosfp_updater = GEOSFP("4x5"; dtype = Float64,
     coord_defaults = Dict(:lon => 0.0, :lat => 0.0, :lev => 1.0))
 
 domain = DomainInfo(
@@ -65,7 +72,7 @@ domain = DomainInfo(
 outfile = ("RUNNER_TEMP" ∈ keys(ENV) ? ENV["RUNNER_TEMP"] : tempname()) * "out.nc" # This is just a location to save the output.
 output = NetCDFOutputter(outfile, 3600.0)
 
-csys = couple(emis, domain, geosfp, output) 
+csys = couple(emis, domain, geosfp, geosfp_updater, output) 
 ```
 ## Advection Operator
 
