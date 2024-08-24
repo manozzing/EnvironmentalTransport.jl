@@ -1,5 +1,4 @@
-export l94_stencil, ppm_stencil, advect2D
-
+export l94_stencil, ppm_stencil, upwind1_stencil, upwind2_stencil
 """
 $(SIGNATURES)
 
@@ -38,7 +37,7 @@ function l94_stencil(ϕ, U, Δt, Δz; kwargs...)
             (U[i] * (ϕ[i + 2] - Δϕ1_mono(i + 2) * (1 + courant(i)) / 2.0)))
     end
 
-    ϕ2(i) = - (FLUX(i - 1) - FLUX(i - 2)) / Δz
+    ϕ2(i) = -(FLUX(i - 1) - FLUX(i - 2)) / Δz
 
     ϕ2(3)
 end
@@ -149,3 +148,55 @@ end
 
 " Return the left and right stencil size of the PPM stencil. "
 stencil_size(s::typeof(ppm_stencil)) = (3, 4)
+
+"""
+$(SIGNATURES)
+
+First-order upwind advection in 1-D: https://en.wikipedia.org/wiki/Upwind_scheme.
+
+* ϕ is the scalar field at the current time step, it should be a vector of length 3 (1 cell on the left, the central cell, and 1 cell on the right).
+* U is the velocity at both edges of the central grid cell, it should be a vector of length 2.
+* Δt is the length of the time step.
+* Δz is the grid spacing.
+
+The output will be time derivative of the central index (i.e. index 2)
+of the ϕ vector (i.e. dϕ/dt).
+
+(Δt is not used, but is a function argument for consistency with other operators.)
+"""
+function upwind1_stencil(ϕ, U, Δt, Δz; kwargs...)
+    u₊ = max(U[1], zero(eltype(U)))
+    u₋ = min(U[2], zero(eltype(U)))
+    ϕ₋ = (ϕ[2] - ϕ[1]) / Δz
+    ϕ₊ = (ϕ[3] - ϕ[2]) / Δz
+    u₊ * ϕ₋ + u₋ * ϕ₊
+end
+
+" Return the left and right stencil size of the first-order upwind stencil. "
+stencil_size(s::typeof(upwind1_stencil)) = (1, 1)
+
+"""
+$(SIGNATURES)
+
+Second-order upwind advection in 1-D, otherwise known as linear-upwind differencing (LUD): https://en.wikipedia.org/wiki/Upwind_scheme.
+
+* ϕ is the scalar field at the current time step, it should be a vector of length 5 (2 cells on the left, the central cell, and 2 cells on the right).
+* U is the velocity at both edges of the central grid cell, it should be a vector of length 2.
+* Δt is the length of the time step.
+* Δz is the grid spacing.
+
+The output will be time derivative of the central index (i.e. index 3)
+of the ϕ vector (i.e. dϕ/dt).
+
+(Δt is not used, but is a function argument for consistency with other operators.)
+"""
+function upwind2_stencil(ϕ, U, Δt, Δz; kwargs...)
+    u₊ = max(U[1], zero(eltype(U)))
+    u₋ = min(U[2], zero(eltype(U)))
+    ϕ₋ = (3ϕ[3] - 4ϕ[2] + ϕ[1]) / (2Δz)
+    ϕ₊ = (-ϕ[4] + 4ϕ[3] - 3ϕ[2]) / (2Δz)
+    u₊ * ϕ₋ + u₋ * ϕ₊
+end
+
+" Return the left and right stencil size of the second-order upwind stencil. "
+stencil_size(s::typeof(upwind2_stencil)) = (2, 2)
