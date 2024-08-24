@@ -26,7 +26,7 @@ We have some emissions centered around Portland, starting at the beginning of th
 
 ```@example adv
 starttime = datetime2unix(DateTime(2022, 5, 1, 0, 0))
-endtime = datetime2unix(DateTime(2022, 5, 15, 0, 0))
+endtime = datetime2unix(DateTime(2022, 5, 2, 0, 0))
 
 @parameters(
     lon=0.0, [unit=u"rad"],
@@ -56,7 +56,7 @@ We also set up an [outputter](https://data.earthsci.dev/stable/api/#EarthSciData
 single system.
 
 ```@example adv
-geosfp, geosfp_updater = GEOSFP("4x5"; dtype = Float64,
+geosfp, geosfp_updater = GEOSFP("0.5x0.625_NA"; dtype = Float64,
     coord_defaults = Dict(:lon => 0.0, :lat => 0.0, :lev => 1.0))
 
 domain = DomainInfo(
@@ -86,7 +86,7 @@ Then, we couple the advection operator to the rest of the system.
     in the coupled system for this to work correctly.
 
 ```@example adv
-adv = AdvectionOperator(600.0, l94_stencil)
+adv = AdvectionOperator(300.0, l94_stencil)
 
 csys = couple(csys, adv)
 ```
@@ -97,11 +97,11 @@ We also choose a operator splitting interval of 600 seconds.
 Then, we run the simulation.
 
 ```@example adv
-sim = Simulator(csys, [deg2rad(4), deg2rad(4), 1])
-st = SimulatorStrangThreads(Tsit5(), SSPRK22(), 600.0)
+sim = Simulator(csys, [deg2rad(0.625), deg2rad(0.5), 1])
+st = SimulatorStrangThreads(Tsit5(), SSPRK22(), 300.0)
 
-run!(sim, st, save_on=false, save_start=false, save_end=false, 
-    initialize_save=false, progress=true)
+@time run!(sim, st, save_on=false, save_start=false, save_end=false, 
+    initialize_save=false)
 ```
 
 ## Visualization
