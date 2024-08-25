@@ -26,7 +26,7 @@ We have some emissions centered around Portland, starting at the beginning of th
 
 ```@example adv
 starttime = datetime2unix(DateTime(2022, 5, 1, 0, 0))
-endtime = datetime2unix(DateTime(2022, 5, 2, 0, 0))
+endtime = datetime2unix(DateTime(2022, 5, 3, 0, 0))
 
 @parameters(
     lon=0.0, [unit=u"rad"],
@@ -40,10 +40,10 @@ function emissions(μ_lon, μ_lat, σ)
     @constants t_unit = 1.0 [unit=u"s"] # Needed so that arguments to `pdf` are unitless.
     dist = MvNormal([starttime, μ_lon, μ_lat, 1], Diagonal(map(abs2, [3600.0, σ, σ, 1])))
     ODESystem([D(c) ~ pdf(dist, [t/t_unit, lon, lat, lev]) * v_emis],
-        t, name = :Test₊emissions)
+        t, name = :emissions)
 end
 
-emis = emissions(deg2rad(-122.6), deg2rad(45.5), 0.1)
+emis = emissions(deg2rad(-122.6), deg2rad(45.5), deg2rad(1))
 ```
 
 ## Coupled System
@@ -86,7 +86,7 @@ Then, we couple the advection operator to the rest of the system.
     in the coupled system for this to work correctly.
 
 ```@example adv
-adv = AdvectionOperator(300.0, l94_stencil)
+adv = AdvectionOperator(300.0, upwind1_stencil)
 
 csys = couple(csys, adv)
 ```
@@ -98,7 +98,13 @@ Then, we run the simulation.
 
 ```@example adv
 sim = Simulator(csys, [deg2rad(0.625), deg2rad(0.5), 1])
-st = SimulatorStrangThreads(Tsit5(), SSPRK22(), 300.0)
+nonstiff_solver = SSPRK22(
+    # Stage limiter to enforce positivity
+    (u, integrator, p, t) -> u .= max.(integrator.u, (zero(eltype(u)),)),
+    # Step limiter to enforce positivity
+    (u, integrator, p, t) -> u .= max.(integrator.u, (zero(eltype(u)),)),
+)
+st = SimulatorStrangThreads(Tsit5(), nonstiff_solver, 300.0)
 
 @time run!(sim, st, save_on=false, save_start=false, save_end=false, 
     initialize_save=false)
@@ -111,10 +117,14 @@ Finally, we can visualize the results of our simulation:
 ```@example adv
 ds = NCDataset(outfile, "r")
 
-anim = @animate for i ∈ 1:size(ds["Test₊emissions₊c"])[4]
+anim = @animate for i ∈ 1:size(ds["emissions₊c"])[4]
+    imax = argmax(reshape(maximum(ds["emissions₊c"][:, :, :, i], dims=(1, 3, 4)), :))
     plot(
-        heatmap(ds["Test₊emissions₊c"][:, :, 1, i]', title="Ground-Level"),
-        heatmap(ds["Test₊emissions₊c"][:, 10, :, i]', title="Vertical Cross-Section"),
+        heatmap(rad2deg.(sim.grid[1]), rad2deg.(sim.grid[2]), 
+            ds["emissions₊c"][:, :, 1, i]', title="Ground-Level", xlabel="Longitude", ylabel="Latitude"),
+        heatmap(rad2deg.(sim.grid[1]), sim.grid[3], ds["emissions₊c"][:, imax, :, i]', 
+            title="Vertical Cross-Section (lat=$(round(rad2deg(sim.grid[2][imax]), digits=1)))", 
+            xlabel="Longitude", ylabel="Vertical Level"),
     )
 end
 gif(anim, fps = 15)
