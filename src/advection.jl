@@ -7,17 +7,17 @@ Create a SciMLOperator to perform 1D advection.
 
 Arguments:
     * `dtype`: The data type of the input and output arrays, e.g. `Float64` or `Float32`.
-    * `shape`: The shape of the input vector or matrix, e.g. (8,) or (8,10). 
+    * `shape`: The shape of the input vector or matrix, e.g. (8,) or (8,10).
             If the input is a matrix, 1D advection will be applied to each of the
             columns in the matrix.
     * `stencil`: The stencil operator, e.g. `l94_stencil` or `ppm_stencil`.
     *  `v_f`: A function to get the wind velocity at a given place and time. For vector inputs
-            the function signature should be `v_f(i, t)`, where `i` is the staggered-grid 
+            the function signature should be `v_f(i, t)`, where `i` is the staggered-grid
             index and `t` is time. For matrix, inputs, the signature should be `v_f(i,j,t)`,
             where `i` is a staggered grid index, `j` is the non-staggered grid column index
             (where `max(i) == shape(2)`)`, and `t` is time.
     * `Δx_f`: A function to get the grid spacing at a given place and time. For vector inputs
-            the function signature should be `Δx_f(i, t)`, where `i` is the grid 
+            the function signature should be `Δx_f(i, t)`, where `i` is the grid
             index and `t` is time. For matrix, inputs, the signature should be `v_f(i,j,t)`,
             where `i` is a grid index, `j` is the column index
             (where `max(i) == shape(2)`)`, and `t` is time.
@@ -69,40 +69,40 @@ end
 """
 $(SIGNATURES)
 
-Return a SciMLOperator that performs 1D advection on the dimension of a 
-tensor given by `index`, where the original tensor has the given data type `dtype` 
+Return a SciMLOperator that performs 1D advection on the dimension of a
+tensor given by `index`, where the original tensor has the given data type `dtype`
 (e.g. `Float32` or `Float64`), and given shape (e.g. `(10, 20, 30)`).
-Advection is performed using the given `stencil` operator 
-(e.g. `l94_stencil` or `ppm_stencil`). 
+Advection is performed using the given `stencil` operator
+(e.g. `l94_stencil` or `ppm_stencil`).
 
-Optionally, a function can be 
+Optionally, a function can be
 specified to create boundary conditions, where the function should have the signature
-`bc_opf(vector_length, stencil)`. See the default boundary condition operator 
+`bc_opf(vector_length, stencil)`. See the default boundary condition operator
 [`EnvironmentalTransport.zerograd_bc_op`](@ref) for more information.
 
-This function returns a function that creates the the operator and also a 
-function `idx_f` that takes a 
-column number of the transformed matrix as an input and returns a vector of 
+This function returns a function that creates the the operator and also a
+function `idx_f` that takes a
+column number of the transformed matrix as an input and returns a vector of
 `CartesianIndex`es in the original tensor that make up that transformed matrix
 column.
 
-The first returned function (the function that creates the operator) can be called with the 
+The first returned function (the function that creates the operator) can be called with the
 following arguments to create the operator:
 
     *  `v_f`: A function to get the wind velocity at a given place and time. For vector inputs
-            the function signature should be `v_f(i, t)`, where `i` is the staggered-grid 
+            the function signature should be `v_f(i, t)`, where `i` is the staggered-grid
             index and `t` is time. For matrix, inputs, the signature should be `v_f(i,j,t)`,
             where `i` is a staggered grid index, `j` is the non-staggered grid column index
             (where `max(i) == shape(2)`)`, and `t` is time.
     * `Δx_f`: A function to get the grid spacing at a given place and time. For vector inputs
-            the function signature should be `Δx_f(i, t)`, where `i` is the grid 
+            the function signature should be `Δx_f(i, t)`, where `i` is the grid
             index and `t` is time. For matrix, inputs, the signature should be `v_f(i,j,t)`,
             where `i` is a grid index, `j` is the column index
             (where `max(i) == shape(2)`)`, and `t` is time.
     * `Δt`: The time step size, which is assumed to be fixed.
     * `p`: Optional parameters to pass to the stencil function.
 
-The reason for the two-step process is that `Δv_f` and `Δx_f`` may be dependent on 
+The reason for the two-step process is that `Δv_f` and `Δx_f`` may be dependent on
 `idx_f`, so we need to return `idx_f` before we create the operator.
 """
 function tensor_advection_op(dtype, shape, index, stencil; bc_opf = zerograd_bc_op,
@@ -115,11 +115,11 @@ function tensor_advection_op(dtype, shape, index, stencil; bc_opf = zerograd_bc_
         adv_op = advect_1d_op(dtype, (shape[index], ncols), stencil, v_f, Δx_f, Δt; p = p)
 
         # How this operator works:
-        # Starting from the right side and moving toward the left, first we 
+        # Starting from the right side and moving toward the left, first we
         # reorder the tensor into a matrix where each column is an element
         # in the requested index of the tensor ('order').
         # Next we apply the boundary conditions ('bc') and advection ('adv_op')
-        # to each column in the matrix, reorder the tensor back into the 
+        # to each column in the matrix, reorder the tensor back into the
         # original configuration ('inv(order)').
         A = I(ncols)
         B = adv_op * bc
@@ -158,7 +158,7 @@ function vf_z(args1, args2)
     x1 = grid1[idx[2]]
     x2 = grid2[idx[3]]
     x3 = idx[4] > 1 ? grid3[idx[4]] - Δ / 2 : grid3[idx[4]]
-    data_f(t, x1, x2, x3) # Staggered grid 
+    data_f(t, x1, x2, x3) # Staggered grid
 end
 tuplefunc(vf) = (i, j, t) -> vf((i, j, t))
 
@@ -166,11 +166,11 @@ tuplefunc(vf) = (i, j, t) -> vf((i, j, t))
 $(SIGNATURES)
 
 Return a function that gets the wind velocity at a given place and time for the given `varname`.
-`vardict` should be a dictionary with keys that are strings with the 
+`vardict` should be a dictionary with keys that are strings with the
 possible `varname`s and values that are the corresponding variables in the
 ODESystem that should be used to get the wind velocity values.
 `idx_f` should be an index function of the type returned by [`EnvironmentalTransport.orderby_op`](@ref).
-`data_f` should be a function that takes a time and three spatial coordinates and returns the value of 
+`data_f` should be a function that takes a time and three spatial coordinates and returns the value of
 the wind speed in the direction indicated by `varname`.
 """
 function get_vf(sim, varname::AbstractString, data_f, idx_f)
@@ -227,8 +227,8 @@ end
 $(SIGNATURES)
 
 Create an `EarthSciMLBase.Operator` that performs advection.
-Advection is performed using the given `stencil` operator 
-(e.g. `l94_stencil` or `ppm_stencil`). 
+Advection is performed using the given `stencil` operator
+(e.g. `l94_stencil` or `ppm_stencil`).
 `p` is an optional parameter set to be used by the stencil operator.
 """
 mutable struct AdvectionOperator <: EarthSciMLBase.Operator
@@ -245,13 +245,13 @@ end
 $(SIGNATURES)
 
 Create a 1D advection SciMLOperator for the given variable name `varname`.
-`vardict` should be a dictionary with keys that are strings with the 
+`vardict` should be a dictionary with keys that are strings with the
 possible `varname`s and values that are the corresponding variables in the
 ODESystem that should be used to get the wind velocity values.
 `p` is an optional parameter set that can be passed to the stencil function.
 """
-function simulator_advection_1d(
-        sim::EarthSciMLBase.Simulator, op::AdvectionOperator, varname; p = NullParameters())
+function simulator_advection_1d(sim::EarthSciMLBase.Simulator, op::AdvectionOperator,
+                                varname; p = NullParameters())
     pvaridx = findfirst( # Get the index of the variable in the domaininfo
         isequal(varname), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
 
