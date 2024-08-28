@@ -26,7 +26,7 @@ We have some emissions centered around Portland, starting at the beginning of th
 
 ```@example adv
 starttime = datetime2unix(DateTime(2022, 5, 1, 0, 0))
-endtime = datetime2unix(DateTime(2022, 5, 3, 0, 0))
+endtime = datetime2unix(DateTime(2022, 5, 10, 0, 0))
 
 @parameters(
     lon=0.0, [unit=u"rad"],
@@ -43,7 +43,7 @@ function emissions(μ_lon, μ_lat, σ)
         t, name = :emissions)
 end
 
-emis = emissions(deg2rad(-122.6), deg2rad(45.5), deg2rad(1))
+emis = emissions(deg2rad(-95.0), deg2rad(37.8), deg2rad(1))
 ```
 
 ## Coupled System
@@ -86,7 +86,7 @@ Then, we couple the advection operator to the rest of the system.
     in the coupled system for this to work correctly.
 
 ```@example adv
-adv = AdvectionOperator(300.0, upwind1_stencil)
+adv = AdvectionOperator(300.0, l94_stencil)
 
 csys = couple(csys, adv)
 ```
@@ -97,14 +97,8 @@ We also choose a operator splitting interval of 600 seconds.
 Then, we run the simulation.
 
 ```@example adv
-sim = Simulator(csys, [deg2rad(0.625), deg2rad(0.5), 1])
-nonstiff_solver = SSPRK22(
-    # Stage limiter to enforce positivity
-    (u, integrator, p, t) -> u .= max.(integrator.u, (zero(eltype(u)),)),
-    # Step limiter to enforce positivity
-    (u, integrator, p, t) -> u .= max.(integrator.u, (zero(eltype(u)),)),
-)
-st = SimulatorStrangThreads(Tsit5(), nonstiff_solver, 300.0)
+sim = Simulator(csys, [deg2rad(1), deg2rad(1), 5])
+st = SimulatorStrangThreads(Tsit5(), Euler(), 300.0)
 
 @time run!(sim, st, save_on=false, save_start=false, save_end=false, 
     initialize_save=false)
