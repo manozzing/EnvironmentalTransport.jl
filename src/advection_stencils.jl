@@ -9,7 +9,7 @@ L94 advection in 1-D (Lin et al., 1994)
 * Δt is the length of the time step.
 * Δz is the grid spacing.
 
-The output will be time derivative of the central index (i.e. index 3) 
+The output will be time derivative of the central index (i.e. index 3)
 of the ϕ vector (i.e. dϕ/dt).
 
 (The output is dependent on the Courant number, which depends on Δt, so Δt needs to be
@@ -55,7 +55,7 @@ PPM advection in 1-D (Collela and Woodward, 1984)
 * Δt is the length of the time step.
 * Δz is the grid spacing.
 
-The output will be time derivative of the central index (i.e. index 4) 
+The output will be time derivative of the central index (i.e. index 4)
 of the ϕ vector (i.e. dϕ/dt).
 
 (The output is dependent on the Courant number, which depends on Δt, so Δt needs to be
@@ -169,7 +169,7 @@ function upwind1_stencil(ϕ, U, Δt, Δz; kwargs...)
     u₋ = min(U[2], zero(eltype(U)))
     ϕ₋ = (ϕ[2] - ϕ[1]) / Δz
     ϕ₊ = (ϕ[3] - ϕ[2]) / Δz
-    u₊ * ϕ₋ + u₋ * ϕ₊
+    -(u₊ * ϕ₋ + u₋ * ϕ₊)
 end
 
 " Return the left and right stencil size of the first-order upwind stencil. "
@@ -195,7 +195,7 @@ function upwind2_stencil(ϕ, U, Δt, Δz; kwargs...)
     u₋ = min(U[2], zero(eltype(U)))
     ϕ₋ = (3ϕ[3] - 4ϕ[2] + ϕ[1]) / (2Δz)
     ϕ₊ = (-ϕ[4] + 4ϕ[3] - 3ϕ[2]) / (2Δz)
-    u₊ * ϕ₋ + u₋ * ϕ₊
+    -(u₊ * ϕ₋ + u₋ * ϕ₊)
 end
 
 " Return the left and right stencil size of the second-order upwind stencil. "
