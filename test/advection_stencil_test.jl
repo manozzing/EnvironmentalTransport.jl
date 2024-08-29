@@ -78,8 +78,8 @@ end
         for stencil in [upwind1_stencil, upwind2_stencil, l94_stencil, ppm_stencil]
             @testset "$(nameof(stencil))" begin
                 lpad, rpad = EnvironmentalTransport.stencil_size(stencil)
-        for (dir, v) in [("up", 1.0:11), ("down", 11.0:-1:1), ("rand", rand(11))]
-            @testset "$dir" begin
+                for (dir, v) in [("up", 1.0:11), ("down", 11.0:-1:1), ("rand", rand(11))]
+                    @testset "$dir" begin
                         dudt = [stencil(u0[(i - lpad):(i + rpad)], v[i:(i + 1)], Δt, Δz)
                                 for i in (1 + lpad):(10 - rpad)]
                         @test dudt ≈ zeros(10 - lpad - rpad)
@@ -133,7 +133,7 @@ end
                                     dudt = [stencil(
                                                 u0[(i - lpad):(i + rpad)], v[i:(i + 1)], Δt, Δz[i])
                                             for i in (1 + lpad):(N - rpad)]
-                                    @test sum(dudt) ≈ 0.0
+                                    @test sum(dudt .* Δz[1 + lpad:N - rpad]) ≈ 0.0
                                 end
                             end
                         end
