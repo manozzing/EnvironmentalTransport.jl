@@ -278,7 +278,6 @@ function EarthSciMLBase.get_scimlop(op::AdvectionOperator, s::Simulator)
     # TODO: Turn vertical advection back on.
     #op = +([simulator_advection_1d(s, op, pv, p = s.p) for pv in pvarstrs]...)
     op = +([simulator_advection_1d(s, op, pv, p = s.p) for pv in pvarstrs[1:2]]...)
-    #op = simulator_advection_1d(s, op, pvarstrs[1], p = s.p)
     u = zeros(EarthSciMLBase.utype(s.domaininfo), size(s)...)
     cache_operator(op, u[:])
 end

@@ -38,12 +38,12 @@ function emissions(μ_lon, μ_lat, σ)
     @variables c(t) = 0.0 [unit=u"kg"]
     @constants v_emis = 50.0 [unit=u"kg/s"]
     @constants t_unit = 1.0 [unit=u"s"] # Needed so that arguments to `pdf` are unitless.
-    dist = MvNormal([starttime, μ_lon, μ_lat, 1], Diagonal(map(abs2, [3600.0, σ, σ, 1])))
+    dist = MvNormal([starttime, μ_lon, μ_lat, 1], Diagonal(map(abs2, [3600.0*24*3, σ, σ, 1])))
     ODESystem([D(c) ~ pdf(dist, [t/t_unit, lon, lat, lev]) * v_emis],
         t, name = :emissions)
 end
 
-emis = emissions(deg2rad(-95.0), deg2rad(37.8), deg2rad(1))
+emis = emissions(deg2rad(-122.6), deg2rad(45.5), deg2rad(1))
 ```
 
 ## Coupled System
@@ -66,7 +66,7 @@ domain = DomainInfo(
     constBC(16.0,
         lon ∈ Interval(deg2rad(-130.0), deg2rad(-60.0)),
         lat ∈ Interval(deg2rad(9.75), deg2rad(60.0)),
-        lev ∈ Interval(1, 15)),
+        lev ∈ Interval(1, 3)),
     dtype = Float64)
 
 outfile = ("RUNNER_TEMP" ∈ keys(ENV) ? ENV["RUNNER_TEMP"] : tempname()) * "out.nc" # This is just a location to save the output.
@@ -86,7 +86,7 @@ Then, we couple the advection operator to the rest of the system.
     in the coupled system for this to work correctly.
 
 ```@example adv
-adv = AdvectionOperator(300.0, l94_stencil)
+adv = AdvectionOperator(300.0, upwind1_stencil)
 
 csys = couple(csys, adv)
 ```
@@ -97,8 +97,8 @@ We also choose a operator splitting interval of 600 seconds.
 Then, we run the simulation.
 
 ```@example adv
-sim = Simulator(csys, [deg2rad(1), deg2rad(1), 5])
-st = SimulatorStrangThreads(Tsit5(), Euler(), 300.0)
+sim = Simulator(csys, [deg2rad(1), deg2rad(1), 1])
+st = SimulatorStrangThreads(Tsit5(), SSPRK22(), 300.0)
 
 @time run!(sim, st, save_on=false, save_start=false, save_end=false, 
     initialize_save=false)

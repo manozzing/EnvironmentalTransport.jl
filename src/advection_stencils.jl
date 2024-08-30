@@ -162,14 +162,16 @@ First-order upwind advection in 1-D: https://en.wikipedia.org/wiki/Upwind_scheme
 The output will be time derivative of the central index (i.e. index 2)
 of the ϕ vector (i.e. dϕ/dt).
 
-(Δt is not used, but is a function argument for consistency with other operators.)
+`Δt` and `p` are not used, but are function arguments for consistency with other operators.
 """
-function upwind1_stencil(ϕ, U, Δt, Δz; kwargs...)
-    u₊ = max(U[1], zero(eltype(U)))
-    u₋ = min(U[2], zero(eltype(U)))
-    ϕ₋ = (ϕ[2] - ϕ[1]) / Δz
-    ϕ₊ = (ϕ[3] - ϕ[2]) / Δz
-    -(u₊ * ϕ₋ + u₋ * ϕ₊)
+function upwind1_stencil(ϕ, U, Δt, Δz; p = nothing)
+    ul₊ = max(U[1], zero(eltype(U)))
+    ul₋ = min(U[1], zero(eltype(U)))
+    ur₊ = max(U[2], zero(eltype(U)))
+    ur₋ = min(U[2], zero(eltype(U)))
+    flux₊ = (ϕ[1]*ul₊ - ϕ[2]*ur₊) / Δz
+    flux₋ = (ϕ[2]*ul₋ - ϕ[3]*ur₋) / Δz
+    flux₊ + flux₋
 end
 
 " Return the left and right stencil size of the first-order upwind stencil. "
