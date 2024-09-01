@@ -251,9 +251,10 @@ ODESystem that should be used to get the wind velocity values.
 `p` is an optional parameter set that can be passed to the stencil function.
 """
 function simulator_advection_1d(sim::EarthSciMLBase.Simulator, op::AdvectionOperator,
-                                varname; p = NullParameters())
-    pvaridx = findfirst( # Get the index of the variable in the domaininfo
-        isequal(varname), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
+        varname; p = NullParameters())
+    # Get the index of the variable in the domaininfo.
+    pvaridx = findfirst(isequal(varname),
+        String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
 
     op_f, idx_f = tensor_advection_op(
         EarthSciMLBase.utype(sim.domaininfo),
@@ -275,9 +276,7 @@ function EarthSciMLBase.get_scimlop(op::AdvectionOperator, s::Simulator)
     pvars = EarthSciMLBase.pvars(s.domaininfo)
     pvarstrs = [String(Symbol(pv)) for pv in pvars]
     # Create advection operators in each of the three dimensions and add them together.
-    # TODO: Turn vertical advection back on.
-    #op = +([simulator_advection_1d(s, op, pv, p = s.p) for pv in pvarstrs]...)
-    op = +([simulator_advection_1d(s, op, pv, p = s.p) for pv in pvarstrs[1:2]]...)
+    op = +([simulator_advection_1d(s, op, pv, p = s.p) for pv in pvarstrs]...)
     u = zeros(EarthSciMLBase.utype(s.domaininfo), size(s)...)
     cache_operator(op, u[:])
 end

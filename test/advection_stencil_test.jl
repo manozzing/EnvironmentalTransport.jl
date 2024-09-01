@@ -22,7 +22,7 @@ end
 @testset "upwind1 1" begin
     c2 = [c[1], c..., c[end]]
     result = [upwind1_stencil(c2[(i - 1):(i + 1)], v[(i - 1):i], Δt, Δz) for i in 2:7]
-    @test c .+ result .* Δt ≈ [0.0, 0.19999999999999996, 1.4, 2.6, 3.8, 5.0]
+    @test c .+ result .* Δt ≈ [0.0, 0.3999999999999999, 1.8, 3.2, 4.6, 4.5]
 end
 
 @testset "upwind2 1" begin
@@ -81,16 +81,22 @@ end
         @testset "$dir" begin
             v = 1.0
             Δt = 1.0
-            Δz = 1.0
-            for stencil in [upwind1_stencil, upwind2_stencil, l94_stencil, ppm_stencil]
-                @testset "$(nameof(stencil))" begin
-                    lpad, rpad = EnvironmentalTransport.stencil_size(stencil)
-                    dudt = [stencil(u0[(i - lpad):(i + rpad)], [v, v], Δt, Δz)
-                            for i in (1 + lpad):(10 - rpad)]
-                    if dir == "up"
-                        @test dudt ≈ zeros(10 - lpad - rpad) .- 1
-                    else
-                        @test dudt ≈ zeros(10 - lpad - rpad) .+ 1
+            # For vertical grid, increasing altitude mean decreasing pressure, so Δz is negative.
+            for (Δz, zdir) in [(1.0, "pos Δz"), (-1.0, "neg Δz")]
+                @testset "$zdir" begin
+                    uu0 = u0 .* sign(Δz)
+                    for stencil in [
+                        upwind1_stencil, upwind2_stencil, l94_stencil, ppm_stencil]
+                        @testset "$(nameof(stencil))" begin
+                            lpad, rpad = EnvironmentalTransport.stencil_size(stencil)
+                            dudt = [stencil(uu0[(i - lpad):(i + rpad)], [v, v], Δt, Δz)
+                                    for i in (1 + lpad):(10 - rpad)]
+                            if dir == "up"
+                                @test dudt ≈ zeros(10 - lpad - rpad) .- 1
+                            else
+                                @test dudt ≈ zeros(10 - lpad - rpad) .+ 1
+                            end
+                        end
                     end
                 end
             end
@@ -106,8 +112,8 @@ end
             N = 10 + lpad * 2 + rpad * 2
             v_opts = [("c", ones(N + 1)), ("up", 1.0:(N + 1)),
                 ("down", (N + 1):-1:1.0), ("neg up", -(1.0:(N + 1))),
-                ("neg down", -((N + 1):-1:1.0)), ("rand", rand(N + 1) .*2 .-1)]
-            Δz_opts = [("c", ones(N)), ("up", 1.0:N), ("down", N:-1:1.0)]
+                ("neg down", -((N + 1):-1:1.0)), ("rand", rand(N + 1) .* 2 .- 1)]
+            Δz_opts = [("c", ones(N)), ("up", 1.0:N), ("down", N:-1:1.0), ("neg", -N:-1.0)]
             for (d1, u0_in) in u0_opts
                 @testset "u0 $d1" begin
                     u0 = zeros(N)
@@ -122,7 +128,7 @@ end
                                                 v[i:(i + 1)], Δt,
                                                 Δz[i])
                                             for i in (1 + lpad):(N - rpad)]
-                                    @test sum(dudt .* Δz[1 + lpad:N - rpad]) ≈ 0.0 atol=1e-14
+                                    @test sum(dudt .* Δz[(1 + lpad):(N - rpad)])≈0.0 atol=1e-14
                                 end
                             end
                         end

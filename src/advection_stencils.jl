@@ -165,10 +165,11 @@ of the ϕ vector (i.e. dϕ/dt).
 `Δt` and `p` are not used, but are function arguments for consistency with other operators.
 """
 function upwind1_stencil(ϕ, U, Δt, Δz; p = nothing)
-    ul₊ = max(U[1], zero(eltype(U)))
-    ul₋ = min(U[1], zero(eltype(U)))
-    ur₊ = max(U[2], zero(eltype(U)))
-    ur₋ = min(U[2], zero(eltype(U)))
+    sz = sign(Δz) # Handle negative grid spacing
+    ul₊ = sz*max(sz*U[1], zero(eltype(U)))
+    ul₋ = sz*min(sz*U[1], zero(eltype(U)))
+    ur₊ = sz*max(sz*U[2], zero(eltype(U)))
+    ur₋ = sz*min(sz*U[2], zero(eltype(U)))
     flux₊ = (ϕ[1]*ul₊ - ϕ[2]*ur₊) / Δz
     flux₋ = (ϕ[2]*ul₋ - ϕ[3]*ur₋) / Δz
     flux₊ + flux₋
