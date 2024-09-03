@@ -26,11 +26,11 @@ We have some emissions centered around Portland, starting at the beginning of th
 
 ```@example adv
 starttime = datetime2unix(DateTime(2022, 5, 1, 0, 0))
-endtime = datetime2unix(DateTime(2022, 5, 10, 0, 0))
+endtime = datetime2unix(DateTime(2022, 6, 1, 0, 0))
 
 @parameters(
-    lon=0.0, [unit=u"rad"],
-    lat=0.0, [unit=u"rad"],
+    lon=-97.0, [unit=u"rad"],
+    lat=30.0, [unit=u"rad"],
     lev=1.0,
 )
 
@@ -57,15 +57,15 @@ single system.
 
 ```@example adv
 geosfp, geosfp_updater = GEOSFP("0.5x0.625_NA"; dtype = Float64,
-    coord_defaults = Dict(:lon => 0.0, :lat => 0.0, :lev => 1.0))
+    coord_defaults = Dict(:lon => -97.0, :lat => 30.0, :lev => 1.0))
 
 domain = DomainInfo(
     [partialderivatives_δxyδlonlat,
         partialderivatives_δPδlev_geosfp(geosfp)],
     constIC(16.0, t ∈ Interval(starttime, endtime)),
     constBC(16.0,
-        lon ∈ Interval(deg2rad(-130.0), deg2rad(-60.25)),
-        lat ∈ Interval(deg2rad(10.125), deg2rad(60.0)),
+        lon ∈ Interval(deg2rad(-129), deg2rad(-61)),
+        lat ∈ Interval(deg2rad(11), deg2rad(59)),
         lev ∈ Interval(1, 30)),
     dtype = Float64)
 
@@ -86,7 +86,7 @@ Then, we couple the advection operator to the rest of the system.
     in the coupled system for this to work correctly.
 
 ```@example adv
-adv = AdvectionOperator(600.0, upwind1_stencil)
+adv = AdvectionOperator(400.0, upwind1_stencil)
 
 csys = couple(csys, adv)
 ```
@@ -98,7 +98,7 @@ Then, we run the simulation.
 
 ```@example adv
 sim = Simulator(csys, [deg2rad(1), deg2rad(1), 1])
-st = SimulatorStrangThreads(Tsit5(), SSPRK22(), 600.0)
+st = SimulatorStrangThreads(Tsit5(), SSPRK22(), 400.0)
 
 @time run!(sim, st, save_on=false, save_start=false, save_end=false, 
     initialize_save=false)
@@ -111,8 +111,8 @@ Finally, we can visualize the results of our simulation:
 ```@example adv
 ds = NCDataset(outfile, "r")
 
+imax = argmax(reshape(maximum(ds["emissions₊c"][:, :, :, :], dims=(1, 3, 4)), :))
 anim = @animate for i ∈ 1:size(ds["emissions₊c"])[4]
-    imax = argmax(reshape(maximum(ds["emissions₊c"][:, :, :, i], dims=(1, 3, 4)), :))
     plot(
         heatmap(rad2deg.(sim.grid[1]), rad2deg.(sim.grid[2]), 
             ds["emissions₊c"][:, :, 1, i]', title="Ground-Level", xlabel="Longitude", ylabel="Latitude"),
