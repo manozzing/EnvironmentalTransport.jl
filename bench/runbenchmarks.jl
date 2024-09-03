@@ -19,8 +19,8 @@ function setup_advection_simulator(lonres, latres, stencil)
             partialderivatives_δPδlev_geosfp(geosfp)],
         constIC(16.0, t ∈ Interval(starttime, endtime)),
         constBC(16.0,
-            lon ∈ Interval(deg2rad(-130.0), deg2rad(-60.0)),
-            lat ∈ Interval(deg2rad(9.75), deg2rad(60.0)),
+            lon ∈ Interval(deg2rad(-129), deg2rad(-61)),
+            lat ∈ Interval(deg2rad(11), deg2rad(59)),
             lev ∈ Interval(1, 3)))
 
     function emissions(t)
@@ -44,15 +44,17 @@ suite["Advection Simulator"] = BenchmarkGroup(["advection", "simulator"])
 suite["Advection Simulator"]["in-place"] = BenchmarkGroup()
 suite["Advection Simulator"]["out-of-place"] = BenchmarkGroup()
 
-for stencil ∈ [l94_stencil, ppm_stencil]
+for stencil in [l94_stencil, ppm_stencil]
     suite["Advection Simulator"]["in-place"][stencil] = BenchmarkGroup()
     suite["Advection Simulator"]["out-of-place"][stencil] = BenchmarkGroup()
-    for lonres ∈ [4, 2]
-        for latres ∈ [5, 3]
+    for lonres in [4, 2]
+        for latres in [5, 3]
             @info "setting up $lonres x $latres with $stencil"
             op, u = setup_advection_simulator(lonres, latres, stencil)
-            suite["Advection Simulator"]["in-of-place"][stencil][length(u)] = @benchmarkable $(op)($(u[:]), $(u[:]), [0.0], $starttime)
-            suite["Advection Simulator"]["out-of-place"][stencil][length(u)] = @benchmarkable $(op)($(u[:]), [0.0], $starttime)
+            suite["Advection Simulator"]["in-of-place"][stencil][length(u)] = @benchmarkable $(op)(
+                $(u[:]), $(u[:]), [0.0], $starttime)
+            suite["Advection Simulator"]["out-of-place"][stencil][length(u)] = @benchmarkable $(op)(
+                $(u[:]), [0.0], $starttime)
         end
     end
 end
