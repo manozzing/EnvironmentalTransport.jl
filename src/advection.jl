@@ -18,6 +18,13 @@ function advection_kernel_4d(u, stencil, vs, Δs, Δt, idx, p = NullParameters()
     end
     du
 end
+function advection_kernel_4d_builder(stencil, v_fs, Δ_fs)
+    function advect_f(u, idx, Δt, t, p = NullParameters())
+        vs = get_vs(v_fs, idx, t)
+        Δs = get_Δs(Δ_fs, idx, t)
+        advection_kernel_4d(u, stencil, vs, Δs, Δt, idx, p)
+    end
+end
 
 function get_vs(v_fs, i, j, k, t)
     (
@@ -42,31 +49,23 @@ Arguments:
     * `Δ_fs`: A vector of functions to get the grid spacing at a given place and time.
             The function signature should be `Δ_fs(i, j, k, t)`.
     * `Δt`: The time step size, which is assumed to be fixed.
-    * `bc_arraytype`: The boundary condition array type, e.g. `ZeroGradBCArray`.
+    * `bc_type`: The boundary condition type, e.g. `ZeroGradBC()`.
 =#
-function advection_op(u_prototype, stencil, v_fs, Δ_fs, Δt, bc_arraytype;
+function advection_op(u_prototype, stencil, v_fs, Δ_fs, Δt, bc_type;
         p = NullParameters())
     sz = size(u_prototype)
     v_fs = tuple(v_fs...)
     Δ_fs = tuple(Δ_fs...)
+    adv_kernel = advection_kernel_4d_builder(stencil, v_fs, Δ_fs)
     function advection(u, p, t) # Out-of-place
-        u = bc_arraytype(reshape(u, sz...))
-        du = [advection_kernel_4d(u, stencil, get_vs(v_fs, idx, t),
-                  get_Δs(Δ_fs, idx, t), Δt, idx, p)
-              for idx in CartesianIndices(u)]
+        u = bc_type(reshape(u, sz...))
+        du = adv_kernel.((u,), CartesianIndices(u), (Δt,), (t,), (p,))
         reshape(du, :)
     end
     function advection(du, u, p, t) # In-place
-        u = bc_arraytype(reshape(u, sz...))
+        u = bc_type(reshape(u, sz...))
         du = reshape(du, sz...)
-        for i in 1:sz[2], j in 1:sz[3], k in 1:sz[4]
-            vs = get_vs(v_fs, i, j, k, t)
-            Δs = get_Δs(Δ_fs, i, j, k, t)
-            for s in 1:sz[1]
-                idx = CartesianIndex(s, i, j, k)
-                du[s, i, j, k] = advection_kernel_4d(u, stencil, vs, Δs, Δt, idx, p)
-            end
-        end
+        du .= adv_kernel.((u,), CartesianIndices(u), (Δt,), (t,), (p,))
     end
     FunctionOperator(advection, reshape(u_prototype, :), p = p)
 end
@@ -106,10 +105,6 @@ tuplefunc(vf) = (i, j, k, t) -> vf((i, j, k, t))
 $(SIGNATURES)
 
 Return a function that gets the wind velocity at a given place and time for the given `varname`.
-`vardict` should be a dictionary with keys that are strings with the
-possible `varname`s and values that are the corresponding variables in the
-ODESystem that should be used to get the wind velocity values.
-`idx_f` should be an index function of the type returned by [`EnvironmentalTransport.orderby_op`](@ref).
 `data_f` should be a function that takes a time and three spatial coordinates and returns the value of
 the wind speed in the direction indicated by `varname`.
 """
@@ -160,16 +155,16 @@ Create an `EarthSciMLBase.Operator` that performs advection.
 Advection is performed using the given `stencil` operator
 (e.g. `l94_stencil` or `ppm_stencil`).
 `p` is an optional parameter set to be used by the stencil operator.
-`bc_arraytype` is the boundary condition array type, e.g. `ZeroGradBCArray`.
+`bc_type` is the boundary condition type, e.g. `ZeroGradBC()`.
 """
 mutable struct AdvectionOperator <: EarthSciMLBase.Operator
     Δt::Any
     stencil::Any
-    bc_arraytype::Any
+    bc_type::Any
     vardict::Any
 
-    function AdvectionOperator(Δt, stencil, bc_arraytype)
-        new(Δt, stencil, bc_arraytype, nothing)
+    function AdvectionOperator(Δt, stencil, bc_type)
+        new(Δt, stencil, bc_type, nothing)
     end
 end
 
@@ -185,7 +180,7 @@ function EarthSciMLBase.get_scimlop(op::AdvectionOperator, sim::Simulator, u = n
         push!(v_fs, get_vf(sim, varname, data_f))
         push!(Δ_fs, get_Δ(sim, varname))
     end
-    scimlop = advection_op(u, op.stencil, v_fs, Δ_fs, op.Δt, op.bc_arraytype, p = sim.p)
+    scimlop = advection_op(u, op.stencil, v_fs, Δ_fs, op.Δt, op.bc_type, p = sim.p)
     cache_operator(scimlop, u[:])
 end
 

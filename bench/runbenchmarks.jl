@@ -32,7 +32,7 @@ function setup_advection_simulator(lonres, latres, stencil)
     emis = emissions(t)
 
     csys = couple(emis, domain, geosfp, updater)
-    op = AdvectionOperator(100.0, stencil, ZeroGradBCArray)
+    op = AdvectionOperator(100.0, stencil, ZeroGradBC())
     csys = couple(csys, op)
     sim = Simulator(csys, [deg2rad(lonres), deg2rad(latres), 1])
     scimlop = EarthSciMLBase.get_scimlop(only(csys.ops), sim)

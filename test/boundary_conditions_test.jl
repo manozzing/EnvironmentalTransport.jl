@@ -2,7 +2,7 @@ using Main.EnvironmentalTransport
 using Test
 
 a = rand(3, 4)
-x = ZeroGradBCArray(a)
+x = ZeroGradBC()(a)
 
 @test x[1:3,1:4] == a
 @test all(x[-10:1,15:30] .== a[begin,end])

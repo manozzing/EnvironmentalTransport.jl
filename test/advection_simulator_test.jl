@@ -49,7 +49,7 @@ sol = run!(sim, st)
 
 @test 310 < norm(sol.u[end]) < 330
 
-op = AdvectionOperator(100.0, l94_stencil, ZeroGradBCArray)
+op = AdvectionOperator(100.0, l94_stencil, ZeroGradBC())
 
 @test isnothing(op.vardict) # Before coupling, there shouldn't be anything here.
 

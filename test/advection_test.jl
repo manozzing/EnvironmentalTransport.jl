@@ -17,7 +17,7 @@ v_fs = ((i, j, k, t) -> v[i], (i, j, k, t) -> v[j], (i, j, k, t) -> v[k])
 Δ_fs = ((i, j, k, t) -> Δz, (i, j, k, t) -> Δz, (i, j, k, t) -> Δz)
 
 @testset "4d advection op" begin
-    adv_op = advection_op(c, upwind1_stencil, v_fs, Δ_fs, Δt, ZeroGradBCArray)
+    adv_op = advection_op(c, upwind1_stencil, v_fs, Δ_fs, Δt, ZeroGradBC())
     adv_op = cache_operator(adv_op, c)
 
     result_oop = adv_op(c[:], NullParameters(), 0.0)
@@ -39,7 +39,7 @@ mul_stencil(ϕ, U, Δt, Δz; p = 0.0) = p
 EnvironmentalTransport.stencil_size(s::typeof(mul_stencil)) = (0, 0)
 
 @testset "parameters" begin
-    adv_op = advection_op(c, mul_stencil, v_fs, Δ_fs, Δt, ZeroGradBCArray, p = 0.0)
+    adv_op = advection_op(c, mul_stencil, v_fs, Δ_fs, Δt, ZeroGradBC(), p = 0.0)
     adv_op = cache_operator(adv_op, c)
 
     result_oop = adv_op(c[:], 2.0, 0.0)

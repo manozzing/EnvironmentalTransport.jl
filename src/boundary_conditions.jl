@@ -1,4 +1,4 @@
-export BCArray, ZeroGradBCArray
+export ZeroGradBC
 
 "An array with external indexing implemented for boundary conditions."
 abstract type BCArray{T, N} <: AbstractArray{T, N} end
@@ -27,3 +27,11 @@ function Base.getindex(A::ZeroGradBCArray{P, T, N},
     @inbounds ret = v[i...]
     ret
 end
+
+"""
+$(SIGNATURES)
+
+Zero gradient boundary conditions.
+"""
+struct ZeroGradBC end
+(bc::ZeroGradBC)(x) = ZeroGradBCArray(x)

@@ -78,6 +78,7 @@ csys = couple(emis, domain, geosfp, geosfp_updater, output)
 
 Next, we create an [`AdvectionOperator`](@ref) to perform advection. 
 We need to specify a time step (600 s in this case), as stencil algorithm to do the advection (current options are [`l94_stencil`](@ref) and [`ppm_stencil`](@ref)).
+We also specify zero gradient boundary conditions.
 
 Then, we couple the advection operator to the rest of the system.
 
@@ -86,7 +87,7 @@ Then, we couple the advection operator to the rest of the system.
     in the coupled system for this to work correctly.
 
 ```@example adv
-adv = AdvectionOperator(300.0, upwind1_stencil, ZeroGradBCArray)
+adv = AdvectionOperator(300.0, upwind1_stencil, ZeroGradBC())
 
 csys = couple(csys, adv)
 ```
