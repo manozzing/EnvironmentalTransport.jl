@@ -50,9 +50,9 @@ for stencil in [l94_stencil, ppm_stencil]
     for (lonres, latres) in ((0.625, 0.5), (0.3125, 0.25))
         @info "setting up $lonres x $latres with $stencil"
         op, u = setup_advection_simulator(lonres, latres, stencil)
-        suite["Advection Simulator"]["in-place"][stencil]["$lonres x $latres (N=$(length(u))"] = @benchmarkable $(op)(
+        suite["Advection Simulator"]["in-place"][stencil]["$lonres x $latres (N=$(length(u)))"] = @benchmarkable $(op)(
             $(u[:]), $(u[:]), [0.0], $starttime)
-        suite["Advection Simulator"]["out-of-place"][stencil]["$lonres x $latres (N=$(length(u))"] = @benchmarkable $(op)(
+        suite["Advection Simulator"]["out-of-place"][stencil]["$lonres x $latres (N=$(length(u)))"] = @benchmarkable $(op)(
             $(u[:]), [0.0], $starttime)
     end
 end
