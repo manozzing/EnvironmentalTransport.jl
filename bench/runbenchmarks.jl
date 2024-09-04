@@ -11,7 +11,7 @@ function setup_advection_simulator(lonres, latres, stencil)
     @parameters lon=0.0 lat=0.0 lev=1.0 t
     endtime = datetime2unix(DateTime(2022, 5, 1, 1, 0, 5))
 
-    geosfp, updater = GEOSFP("4x5"; dtype = Float64,
+    geosfp, updater = GEOSFP("0.25x0.3125_NA"; dtype = Float64,
         coord_defaults = Dict(:lon => 0.0, :lat => 0.0, :lev => 1.0))
 
     domain = DomainInfo(
@@ -47,15 +47,13 @@ suite["Advection Simulator"]["out-of-place"] = BenchmarkGroup()
 for stencil in [l94_stencil, ppm_stencil]
     suite["Advection Simulator"]["in-place"][stencil] = BenchmarkGroup()
     suite["Advection Simulator"]["out-of-place"][stencil] = BenchmarkGroup()
-    for lonres in [4, 2]
-        for latres in [5, 3]
-            @info "setting up $lonres x $latres with $stencil"
-            op, u = setup_advection_simulator(lonres, latres, stencil)
-            suite["Advection Simulator"]["in-of-place"][stencil][length(u)] = @benchmarkable $(op)(
-                $(u[:]), $(u[:]), [0.0], $starttime)
-            suite["Advection Simulator"]["out-of-place"][stencil][length(u)] = @benchmarkable $(op)(
-                $(u[:]), [0.0], $starttime)
-        end
+    for (lonres, latres) in ((0.625, 0.5), (0.3125, 0.25))
+        @info "setting up $lonres x $latres with $stencil"
+        op, u = setup_advection_simulator(lonres, latres, stencil)
+        suite["Advection Simulator"]["in-place"][stencil]["$lonres x $latres (N=$(length(u))"] = @benchmarkable $(op)(
+            $(u[:]), $(u[:]), [0.0], $starttime)
+        suite["Advection Simulator"]["out-of-place"][stencil]["$lonres x $latres (N=$(length(u))"] = @benchmarkable $(op)(
+            $(u[:]), [0.0], $starttime)
     end
 end
 
