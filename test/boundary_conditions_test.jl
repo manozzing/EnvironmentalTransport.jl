@@ -1,13 +1,13 @@
-using Main.EnvironmentalTransport: zerograd_bc_op
 using Main.EnvironmentalTransport
 using Test
 
-u = [1.0, 2, 3]
-u2 = zeros(10)
+a = rand(3, 4)
+x = ZeroGradBCArray(a)
 
-zbc_op = zerograd_bc_op(u, ppm_stencil, p=nothing)
-@test zbc_op(u, nothing, 1.0) ≈ [1.0, 1, 1, 1, 2, 3, 3, 3, 3, 3]
-@test begin
-    zbc_op(u2, u, nothing, 1.0)
-    u2 ≈ [1.0, 1, 1, 1, 2, 3, 3, 3, 3, 3]
-end
+@test x[1:3,1:4] == a
+@test all(x[-10:1,15:30] .== a[begin,end])
+@test all(x[end:end+20,begin-3:begin] .== a[end,begin])
+
+@test all((@view x[1:3,1:4]) .== a)
+
+@test CartesianIndices((3, 4)) == eachindex(x)

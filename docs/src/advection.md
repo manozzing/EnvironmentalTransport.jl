@@ -86,7 +86,7 @@ Then, we couple the advection operator to the rest of the system.
     in the coupled system for this to work correctly.
 
 ```@example adv
-adv = AdvectionOperator(300.0, upwind1_stencil)
+adv = AdvectionOperator(300.0, upwind1_stencil, ZeroGradBCArray)
 
 csys = couple(csys, adv)
 ```

@@ -1,5 +1,5 @@
 using EnvironmentalTransport
-using EnvironmentalTransport: get_vf, get_Δ, orderby_op
+using EnvironmentalTransport: get_vf, get_Δ
 
 using Test
 using EarthSciMLBase, EarthSciData
@@ -49,7 +49,7 @@ sol = run!(sim, st)
 
 @test 310 < norm(sol.u[end]) < 330
 
-op = AdvectionOperator(100.0, l94_stencil)
+op = AdvectionOperator(100.0, l94_stencil, ZeroGradBCArray)
 
 @test isnothing(op.vardict) # Before coupling, there shouldn't be anything here.
 
@@ -63,37 +63,22 @@ sol = run!(sim, st)
 @test 310 < norm(sol.u[end]) < 350
 
 @testset "get_vf lon" begin
-    pvaridx = findfirst(
-        isequal("lon"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
-    _, idx_f = orderby_op(
-        EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
-
-    @test get_vf(sim, "lon", sim.obs_fs[sim.obs_fs_idx[op.vardict["lon"]]], idx_f)(
-        2, 3, starttime) ≈ -6.816296625698776
+    f = sim.obs_fs[sim.obs_fs_idx[op.vardict["lon"]]]
+    @test get_vf(sim, "lon", f)(2, 3, 1, starttime) ≈ -6.816295428727573
 end
 
 @testset "get_vf lat" begin
-    pvaridx = findfirst(
-        isequal("lat"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
-    _, idx_f = orderby_op(
-        EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
-
-    @test get_vf(sim, "lat", sim.obs_fs[sim.obs_fs_idx[op.vardict["lat"]]], idx_f)(
-        2, 3, starttime) ≈ -5.443039543509801
+f = sim.obs_fs[sim.obs_fs_idx[op.vardict["lat"]]]
+    @test get_vf(sim, "lat", f)(3, 2, 1, starttime) ≈ -5.443038969820774
 end
 
 @testset "get_vf lev" begin
-    pvaridx = findfirst(
-        isequal("lev"), String.(Symbol.(EarthSciMLBase.pvars(sim.domaininfo))))
-    _, idx_f = orderby_op(
-        EarthSciMLBase.utype(sim.domaininfo), [size(sim)...], 1 + pvaridx)
-
-    @test get_vf(sim, "lev", sim.obs_fs[sim.obs_fs_idx[op.vardict["lev"]]], idx_f)(
-        2, 3, starttime) ≈ -0.019995461793337128
+    f = sim.obs_fs[sim.obs_fs_idx[op.vardict["lev"]]]
+    @test get_vf(sim, "lev", f)(3, 1, 2, starttime) ≈ -0.019995461793337128
 end
 
 @testset "get_Δ" begin
-    @test get_Δ(sim, "lat")(2, 3, starttime) ≈ 445280.0
-    @test get_Δ(sim, "lon")(2, 3, starttime) ≈ 424080.6852300487
-    @test get_Δ(sim, "lev")(2, 3, starttime) ≈ -1516.7789198950632
+    @test get_Δ(sim, "lat")(2, 3, 1, starttime) ≈ 445280.0
+    @test get_Δ(sim, "lon")(3, 2, 1, starttime) ≈ 432517.0383085161
+    @test get_Δ(sim, "lev")(3, 1, 2, starttime) ≈ -1516.7789198950632
 end
