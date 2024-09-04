@@ -11,9 +11,9 @@ function advection_kernel_4d(u, stencil, vs, Δs, Δt, idx, p = NullParameters()
         (CartesianIndex(0, 0, 0, lpad), CartesianIndex(0, 0, 0, rpad))
     )
     du = zero(eltype(u))
-    for i in eachindex(vs, Δs, offsets)
-        @inbounds v, Δ, (l, r) = vs[i], Δs[i], offsets[i]
-        @inbounds uu = @view u[(idx - l):(idx + r)]
+    @inbounds for i in eachindex(vs, Δs, offsets)
+        v, Δ, (l, r) = vs[i], Δs[i], offsets[i]
+        uu = @view u[(idx - l):(idx + r)]
         du += stencil(uu, v, Δt, Δ; p)
     end
     du
@@ -47,6 +47,8 @@ Arguments:
 function advection_op(u_prototype, stencil, v_fs, Δ_fs, Δt, bc_arraytype;
         p = NullParameters())
     sz = size(u_prototype)
+    v_fs = tuple(v_fs...)
+    Δ_fs = tuple(Δ_fs...)
     function advection(u, p, t) # Out-of-place
         u = bc_arraytype(reshape(u, sz...))
         du = [advection_kernel_4d(u, stencil, get_vs(v_fs, idx, t),
