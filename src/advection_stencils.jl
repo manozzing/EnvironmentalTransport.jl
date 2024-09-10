@@ -17,7 +17,7 @@ an input to the function.)
 """
 function l94_stencil(ϕ, U, Δt, Δz; kwargs...)
     δϕ1(i) = ϕ[i] - ϕ[i - 1]
-
+    δϕ1(i) = δϕ1(i)
     Δϕ1_avg(i) = (δϕ1(i) + δϕ1(i + 1)) / 2.0
 
     ## Monotonicity slope limiter
