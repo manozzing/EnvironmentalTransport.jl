@@ -1,4 +1,4 @@
-export l94_stencil, ppm_stencil, upwind1_stencil, upwind2_stencil
+export l94_stencil, ppm_stencil, upwind1_stencil, upwind2_stencil, ppm_stencil_grid
 """
 $(SIGNATURES)
 
@@ -17,7 +17,7 @@ an input to the function.)
 """
 function l94_stencil(ϕ, U, Δt, Δz; kwargs...)
     δϕ1(i) = ϕ[i] - ϕ[i - 1]
-    δϕ1(i) = δϕ1(i)
+
     Δϕ1_avg(i) = (δϕ1(i) + δϕ1(i + 1)) / 2.0
 
     ## Monotonicity slope limiter
@@ -203,3 +203,118 @@ end
 
 " Return the left and right stencil size of the second-order upwind stencil. "
 stencil_size(s::typeof(upwind2_stencil)) = (2, 2)
+
+
+
+"""
+$(SIGNATURES)
+
+PPM advection in 1-D with changing grid sizes (Collela and Woodward, 1984)
+
+* ϕ is the scalar field at the current time step, it should be a vector of length 8 (3 cells on the left, the central cell, and 4 cells on the right).
+* U is the velocity at both edges of the central grid cell, it should be a vector of length 2.
+* Δt is the length of the time step.
+* Δz is the grid spacing. Here Δz is a vector rather than a single float number because Δz varies over grid cells.
+
+The output will be time derivative of the central index (i.e. index 4)
+of the ϕ vector (i.e. dϕ/dt).
+
+(The output is dependent on the Courant number, which depends on Δt, so Δt needs to be
+an input to the function.)
+"""
+function ppm_stencil_grid(ϕ, U, Δt, Δz; kwargs...)
+    ϵ = 0.01
+    η⁽¹⁾ = 20
+    η⁽²⁾ = 0.05
+
+    ## Edge value calculation
+    δϕ(i) = (Δz[i]/(Δz[i-1]+Δz[i]+Δz[i+1])) * 
+                ( ((2*Δz[i-1]+Δz[i])/(Δz[i+1]+Δz[i]))*(ϕ[i+1]-ϕ[i]) + 
+                ((Δz[i]+2*Δz[i+1])/(Δz[i-1]+Δz[i]))*(ϕ[i]-ϕ[i-1]) )
+
+    function δₘϕ(i)
+        ifelse((ϕ[i + 1] - ϕ[i]) * (ϕ[i] - ϕ[i - 1]) > 0,
+            min(
+                abs(δϕ(i - 1)), 2 * abs(ϕ[i] - ϕ[i - 1]), 2 * abs(ϕ[i + 1] - ϕ[i])) *
+            sign(δϕ(i - 1)),
+            zero(eltype(ϕ))
+        )
+    end
+
+    ϕ₊½(i) = ϕ[i] + 
+            (Δz[i])/(Δz[i]+Δz[i+1])*(ϕ[i+1]-ϕ[i]) + 
+            1/(Δz[i-1]+Δz[i]+Δz[i+1]+Δz[i+2])*(
+            (2*Δz[i+1]*Δz[i])/(Δz[i]+Δz[i+1])*
+            ((Δz[i-1]+Δz[i])/(2*Δz[i]+Δz[i+1])-(Δz[i+2]+Δz[i+1])/(2*Δz[i+1]+Δz[i]))*
+            (ϕ[i+1]-ϕ[i]) - 
+            Δz[i]*(Δz[i-1]+Δz[i])/(2*Δz[i]+Δz[i+1])*δₘϕ(i+1) +
+            Δz[i+1]*(Δz[i+1]+Δz[i+2])/(Δz[i]+2*Δz[i+1])*δₘϕ(i) )
+
+    ## Discontinuity detection
+    δ²ϕ(i) = 1/(Δz[i-1]+Δz[i]+Δz[i+1])*((ϕ[i+1]-ϕ[i])/(Δz[i+1]+Δz[i])-(ϕ[i]-ϕ[i-1])/(Δz[i]+Δz[i-1]))
+
+    function η_tilde(i)
+        ifelse(
+            -δ²ϕ(i + 1) * δ²ϕ(i - 1) * abs(ϕ[i + 1] - ϕ[i - 1]) -
+            ϵ * min(abs(ϕ[i + 1]), abs(ϕ[i - 1])) > 0,
+            -(δ²ϕ(i+1)-δ²ϕ(i-1))/(Δz[i+1]+Δz[i])*(Δz[i]^3+Δz[i-1]^3)/(ϕ[i+1]-ϕ[i-1]),
+            zero(eltype(ϕ))
+        )
+    end
+
+    η(i) = clamp(η⁽¹⁾ * (η_tilde(i) - η⁽²⁾), 0, 1)
+
+    ϕLᵈ(i) = ϕ[i] + 1 / 2 * δₘϕ(i)
+    ϕRᵈ(i) = ϕ[i + 1] + 1 / 2 * δₘϕ(i + 1)
+
+    ϕL₀(i) = ϕ₊½(i) * (1 - η(i)) + ϕLᵈ(i) * η(i)
+    ϕR₀(i) = ϕ₊½(i + 1) * (1 - η(i)) + ϕRᵈ(i) * η(i)
+
+    ## Monotonicity examination
+    function ϕL(i)
+        ifelse((ϕR₀(i) - ϕ[i]) * (ϕ[i] - ϕL₀(i)) <= 0,
+            ϕ[i],
+            ifelse(
+                (ϕR₀(i) - ϕL₀(i)) * (ϕ[i] - 1 / 2 * (ϕL₀(i) + ϕR₀(i))) >=
+                (ϕR₀(i) - ϕL₀(i))^2 / 6,
+                3 * ϕ[i] - 2 * ϕR₀(i),
+                ϕL₀(i)
+            ))
+    end
+
+    function ϕR(i)
+        ifelse((ϕR₀(i) - ϕ[i]) * (ϕ[i] - ϕL₀(i)) <= 0,
+            ϕ[i],
+            ifelse(
+                -(ϕR₀(i) - ϕL₀(i))^2 / 6 >
+                (ϕR₀(i) - ϕL₀(i)) * (ϕ[i] - 1 / 2 * (ϕR₀(i) + ϕL₀(i))),
+                3 * ϕ[i] - 2 * ϕL₀(i),
+                ϕR₀(i)
+            ))
+    end
+
+    ## Compute flux
+    courant(i) = ifelse(U[i] > 0, U[i] * Δt / Δz[i+3], U[i] * Δt / Δz[i+2])
+
+    Δϕ(i) = ϕR(i) - ϕL(i)
+
+    ϕ₆(i) = 6 * (ϕ[i] - 1 / 2 * (ϕL(i) + ϕR(i)))
+
+    function FLUX(i)
+        ifelse(U[i] >= 0,
+            courant(i) * (ϕR(i + 2) -
+             1 / 2 * courant(i) *
+             (Δϕ(i + 2) - (1 - 2 / 3 * courant(i)) * ϕ₆(i + 2))),
+            courant(i) * (ϕL(i + 3) -
+             1 / 2 * courant(i) *
+             (Δϕ(i + 3) - (1 + 2 / 3 * courant(i)) * ϕ₆(i + 3)))
+        )
+    end
+
+    ϕ2(i) = (FLUX(i - 3) - FLUX(i - 2)) / Δt
+
+    ϕ2(4)
+end
+
+" Return the left and right stencil size of the PPM stencil. "
+stencil_size(s::typeof(ppm_stencil_grid)) = (3, 4)
